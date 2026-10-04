@@ -333,14 +333,46 @@ cmd_remove() {
     rmdir -- "$(dirname "$OVERLAY_ROOT")" 2>/dev/null || true
 }
 
+# Plasma Login Manager merges its settings from several files. Print the
+# effective value of one key: $1 is the fallback, the remaining arguments are
+# kreadconfig6's "--group … --key …". Most specific file first.
+login_config_read() {
+    local fallback=$1
+    shift
+    local unset_mark=__${PROG}_unset__ file value
+    local -a files=("$LOGIN_CONFIG")
+    local -a dropins=()
+    local i
+
+    dropins=(/usr/lib/plasmalogin/plasmalogin.conf.d/*)
+    for ((i = ${#dropins[@]} - 1; i >= 0; i--)); do
+        files+=("${dropins[i]}")
+    done
+    files+=(/usr/lib/plasmalogin/defaults.conf)
+    dropins=("$LOGIN_CONFIG".d/*)
+    for ((i = ${#dropins[@]} - 1; i >= 0; i--)); do
+        files+=("${dropins[i]}")
+    done
+
+    for file in "${files[@]}"; do
+        [ -f "$file" ] && [ -r "$file" ] || continue
+        value=$(kreadconfig6 --file "$file" "$@" --default "$unset_mark" 2>/dev/null) || continue
+        if [ "$value" != "$unset_mark" ]; then
+            printf '%s\n' "$value"
+            return 0
+        fi
+    done
+    printf '%s\n' "$fallback"
+}
+
 login_plugin() {
-    kreadconfig6 --file "$LOGIN_CONFIG" --group Greeter --key WallpaperPluginId --default org.kde.image
+    login_config_read org.kde.image --group Greeter --key WallpaperPluginId
 }
 
 cmd_get() {
     command -v kreadconfig6 >/dev/null || die "kreadconfig6 not found"
-    kreadconfig6 --file "$LOGIN_CONFIG" --group Greeter --group Wallpaper \
-        --group "$(login_plugin)" --group General --key "$KEY" --default 100
+    login_config_read 100 --group Greeter --group Wallpaper \
+        --group "$(login_plugin)" --group General --key "$KEY"
 }
 
 cmd_set() {
