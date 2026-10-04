@@ -43,6 +43,12 @@ The same from a terminal:
     sudo plasma-login-blur-slider set 35
     plasma-login-blur-slider status       # what is installed, current value
 
+Each time the login screen starts, its wallpaper process logs one line such
+as `plasma-login-blur-slider: login wallpaper blur set to 35%`, which is a
+quick way to confirm the setting was picked up:
+
+    journalctl -b | grep plasma-login-blur-slider
+
 ## Remove
 
     sudo pacman -R plasma-login-blur-slider
@@ -111,6 +117,17 @@ not create are never touched.
   the slider on how its settings page is laid out. If a future release
   changes either, the affected part quietly does nothing and you are back to
   stock behaviour; the login screen itself is not affected.
+
+## Tested with
+
+Plasma Login Manager 6.7.5 from the Arch Linux packages (Plasma 6.7.5, KDE
+Frameworks 6.30, Qt 6.11), with the Image, Plain Color, Picture of the Day,
+Haenau, Hunyango and Tiled wallpaper types, including the desktop and the
+lock screen, which have to keep behaving as before.
+
+The wallpaper process and the settings module of Plasma Login Manager 6.6.6,
+of the 6.8 beta and of the development branch (October 2026) were also run
+against it, built from source on the same system.
 
 ## Files
 
