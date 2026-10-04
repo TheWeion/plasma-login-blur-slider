@@ -102,6 +102,7 @@ selected_plugins() {
             [ -d "$d" ] && basename "$d"
         done
     else
+        # shellcheck disable=SC2086
         printf '%s\n' $PLUGINS
     fi
 }
