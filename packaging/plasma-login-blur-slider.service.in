@@ -1,0 +1,14 @@
+# For distributions without a package-manager hook: keeps the wallpaper
+# overlays in step with the installed wallpaper plugins.
+
+[Unit]
+Description=Refresh wallpaper overlays for the Plasma login blur slider
+ConditionPathIsDirectory=/usr/share/plasma/wallpapers
+Before=display-manager.service plasmalogin.service
+
+[Service]
+Type=oneshot
+ExecStart=@BINDIR@/plasma-login-blur-slider sync --quiet
+
+[Install]
+WantedBy=multi-user.target

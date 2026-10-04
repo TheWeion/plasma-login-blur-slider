@@ -1,0 +1,11 @@
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Target = usr/share/plasma/wallpapers/*
+
+[Action]
+Description = Refreshing wallpaper overlays for the login blur slider...
+When = PostTransaction
+Exec = /usr/bin/plasma-login-blur-slider sync --quiet

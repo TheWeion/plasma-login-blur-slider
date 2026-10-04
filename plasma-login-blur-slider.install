@@ -1,0 +1,12 @@
+post_install() {
+  plasma-login-blur-slider sync --quiet || true
+  echo 'The "Blur intensity" slider is in System Settings > Login Screen > Configure Appearance.'
+}
+
+post_upgrade() {
+  plasma-login-blur-slider sync --quiet || true
+}
+
+pre_remove() {
+  plasma-login-blur-slider remove --quiet || true
+}
