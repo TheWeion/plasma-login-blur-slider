@@ -84,6 +84,14 @@ load_conf() {
     fi
     STOCK_ROOT=${STOCK_ROOT%/}
     OVERLAY_ROOT=${OVERLAY_ROOT%/}
+
+    local dir
+    for dir in "$STOCK_ROOT" "$OVERLAY_ROOT"; do
+        case "$dir" in
+            /?*) ;;
+            *) die "STOCK_ROOT and OVERLAY_ROOT must be absolute paths below / (check $CONFFILE)" ;;
+        esac
+    done
 }
 
 need_root() {
@@ -266,7 +274,11 @@ build_overlay() {
     # While the old overlay is gone and the new one is not yet in place, the
     # stock plugin is found instead, so there is never a broken state.
     remove_overlay "$target"
-    mv -- "$tmp" "$target"
+    if ! mv -T -- "$tmp" "$target" 2>/dev/null; then
+        rm -rf -- "$tmp"
+        warn "$id: could not put the overlay in place; skipped"
+        return 0
+    fi
     msg "  $id: overlay ready"
 }
 
