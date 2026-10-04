@@ -6,7 +6,7 @@
 import QtQuick
 
 /*
- * Lives inside a wallpaper plugin's root item.
+ * Owned by a wallpaper plugin's root item (see wrappers/main.qml).
  *
  * When that wallpaper is being shown by Plasma Login Manager's wallpaper
  * helper (plasma-login-wallpaper), the helper covers it with a blur effect
@@ -18,15 +18,16 @@ import QtQuick
  * nothing at all. If the helper's scene ever stops looking the way we expect,
  * nothing is touched and the stock blur stays in place.
  */
-Item {
+QtObject {
     id: hook
 
-    visible: false
-    width: 0
-    height: 0
-
-    // The wallpaper plugin's root item (we are declared directly inside it).
-    readonly property Item wallpaperItem: parent
+    // The wallpaper plugin's root item. Set by the wrapper.
+    //
+    // Note that this object is deliberately not a child item of the
+    // wallpaper: WallpaperItem replaces (rather than appends to) its list of
+    // children when a derived component declares any, which would throw away
+    // the stock wallpaper's own contents.
+    property Item wallpaperItem: null
 
     // Only ever act inside Plasma Login Manager's wallpaper helper.
     readonly property bool inLoginHelper: Qt.application.name === "plasma-login-wallpaper"
@@ -98,14 +99,14 @@ Item {
         console.info("plasma-login-blur-slider: login wallpaper blur set to " + Math.round(intensity * 100) + "%");
     }
 
-    Connections {
+    readonly property Connections parentWatcher: Connections {
         target: hook.wallpaperItem
         function onParentChanged() {
             hook.tryHook();
         }
     }
 
-    Timer {
+    readonly property Timer retryTimer: Timer {
         interval: 100
         repeat: true
         running: hook.inLoginHelper && !hook.blurItem && hook.attempts < 100

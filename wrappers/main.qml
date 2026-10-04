@@ -6,6 +6,10 @@
 
     The wallpaper below is the unmodified stock plugin (stock/qmldir points at
     its real main.qml). This wrapper only adds the login-screen blur hook.
+
+    The hook is held in a property on purpose: declaring it as a child object
+    would replace the stock wallpaper's own children (WallpaperItem uses
+    "replace" semantics for list properties in derived components).
 */
 
 import QtQuick
@@ -13,5 +17,9 @@ import "stock" as Stock
 import "plmblur" as PlmBlur
 
 Stock.StockMain {
-    PlmBlur.LoginBlurHook {}
+    id: plasmaLoginBlurWrapper
+
+    readonly property QtObject plasmaLoginBlurHook: PlmBlur.LoginBlurHook {
+        wallpaperItem: plasmaLoginBlurWrapper
+    }
 }
