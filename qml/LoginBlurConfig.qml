@@ -29,15 +29,32 @@ QtObject {
 
     readonly property string rowObjectName: "plasmaLoginBlurSliderRow"
 
-    readonly property bool inLoginScreenSettings: {
-        if (!dialog) {
-            return false;
+    // Plasma Login Manager's settings module is recognised by API that only
+    // it has (other hosts of wallpaper config pages lack all of these).
+    readonly property bool inLoginScreenSettings: dialog !== null && dialog !== undefined
+        && typeof dialog.synchronizeSettings === "function"
+        && typeof dialog.resetSynchronizedSettings === "function"
+        && dialog.sessionModel !== undefined
+
+    // The module tells us when it reloads or resets its settings; without
+    // that we cannot tell a reset from the user picking another wallpaper
+    // type (see attach()).
+    readonly property bool canWatchReloads: inLoginScreenSettings
+        && typeof dialog.loadCalled === "function"
+        && typeof dialog.defaultsCalled === "function"
+
+    property bool reloaded: false
+
+    readonly property Connections reloadWatcher: Connections {
+        target: controller.canWatchReloads ? controller.dialog : null
+        ignoreUnknownSignals: true
+
+        function onLoadCalled() {
+            controller.reloaded = true;
         }
-        const action = dialog.authActionName;
-        if (typeof action === "string" && action.indexOf("plasmalogin") !== -1) {
-            return true;
+        function onDefaultsCalled() {
+            controller.reloaded = true;
         }
-        return typeof dialog.resetSynchronizedSettings === "function" && dialog.sessionModel !== undefined;
     }
 
     property Item row: null
@@ -48,12 +65,19 @@ QtObject {
         }
 
         // When the wallpaper type is switched, the outgoing page is destroyed
-        // only after the incoming one exists. Hide its row straight away.
+        // only after the incoming one exists. Hide its row straight away, and
+        // remember what it was set to.
+        let carried = -1;
         const siblings = formLayout.children;
         for (let i = 0; i < siblings.length; ++i) {
-            if (siblings[i].objectName === rowObjectName) {
-                siblings[i].visible = false;
+            const sibling = siblings[i];
+            if (sibling.objectName !== rowObjectName) {
+                continue;
             }
+            if (sibling.visible && typeof sibling.percent === "number") {
+                carried = sibling.percent;
+            }
+            sibling.visible = false;
         }
 
         const component = Qt.createComponent("LoginBlurRow.qml");
@@ -65,6 +89,20 @@ QtObject {
             objectName: rowObjectName,
             configRoot: configRoot
         });
+
+        // The intensity is stored with the wallpaper type's settings. When
+        // the user picks another type, keep what the slider was set to
+        // instead of jumping back to that type's stored value. This has to
+        // wait until the module has connected to our change signals, and must
+        // not happen when the page was swapped by "Reset" or "Defaults".
+        if (carried >= 0 && canWatchReloads) {
+            Qt.callLater(() => {
+                if (!controller.reloaded && controller.configRoot
+                        && controller.configRoot.cfg_LoginBlurIntensity !== carried) {
+                    controller.configRoot.cfg_LoginBlurIntensity = carried;
+                }
+            });
+        }
     }
 
     onInLoginScreenSettingsChanged: attach()
