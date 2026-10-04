@@ -15,6 +15,9 @@ import "plmblur" as PlmBlur
 Item {
     id: plasmaLoginBlurWrapper
 
+    // Set by the hosting settings page.
+    property var configDialog
+
     property int cfg_LoginBlurIntensity: 100
     property int cfg_LoginBlurIntensityDefault: 100
 
