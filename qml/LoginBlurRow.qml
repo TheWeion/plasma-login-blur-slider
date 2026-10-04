@@ -23,6 +23,10 @@ RowLayout {
     readonly property int percent: configRoot ? configRoot.cfg_LoginBlurIntensity : 100
     readonly property int defaultPercent: configRoot ? configRoot.cfg_LoginBlurIntensityDefault : 100
 
+    // A value taken over from the previous wallpaper type's page that has not
+    // been applied yet (see LoginBlurConfig.qml); -1 if there is none.
+    property int pendingPercent: -1
+
     Kirigami.FormData.label: i18nd("plasma-login-blur-slider", "Blur intensity:")
     Kirigami.FormData.buddyFor: slider
 
@@ -46,10 +50,6 @@ RowLayout {
         }
 
         Accessible.name: i18nd("plasma-login-blur-slider", "Blur intensity")
-
-        QQC2.ToolTip.text: i18nd("plasma-login-blur-slider", "How strongly the wallpaper is blurred behind the login prompt")
-        QQC2.ToolTip.visible: hovered && !pressed
-        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
 
         KCM.SettingHighlighter {
             highlight: row.percent !== row.defaultPercent

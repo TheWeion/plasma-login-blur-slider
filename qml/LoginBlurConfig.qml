@@ -58,48 +58,65 @@ QtObject {
     }
 
     property Item row: null
+    property bool attaching: false
 
     function attach() {
-        if (row || !inLoginScreenSettings || !formLayout || !configRoot) {
+        // Reading these properties can evaluate their bindings for the first
+        // time, which calls this function again through the change handlers
+        // below. So read everything before looking at "row": the nested call
+        // then does the work and this one sees its result.
+        const inSettings = inLoginScreenSettings;
+        const watching = canWatchReloads;
+        const layout = formLayout;
+        const root = configRoot;
+        if (row || attaching || !inSettings || !layout || !root) {
             return;
         }
+        attaching = true;
 
         // When the wallpaper type is switched, the outgoing page is destroyed
         // only after the incoming one exists. Hide its row straight away, and
         // remember what it was set to.
         let carried = -1;
-        const siblings = formLayout.children;
+        const siblings = layout.children;
         for (let i = 0; i < siblings.length; ++i) {
             const sibling = siblings[i];
             if (sibling.objectName !== rowObjectName) {
                 continue;
             }
-            if (sibling.visible && typeof sibling.percent === "number") {
-                carried = sibling.percent;
+            if (sibling.visible) {
+                carried = sibling.pendingPercent >= 0 ? sibling.pendingPercent : sibling.percent;
             }
             sibling.visible = false;
         }
 
         const component = Qt.createComponent("LoginBlurRow.qml");
-        if (component.status !== Component.Ready) {
+        if (component.status === Component.Ready) {
+            row = component.createObject(layout, {
+                objectName: rowObjectName,
+                configRoot: root
+            });
+        } else {
             console.warn("plasma-login-blur-slider: cannot create the slider:", component.errorString());
-            return;
         }
-        row = component.createObject(formLayout, {
-            objectName: rowObjectName,
-            configRoot: configRoot
-        });
+        attaching = false;
 
         // The intensity is stored with the wallpaper type's settings. When
         // the user picks another type, keep what the slider was set to
-        // instead of jumping back to that type's stored value. This has to
-        // wait until the module has connected to our change signals, and must
-        // not happen when the page was swapped by "Reset" or "Defaults".
-        if (carried >= 0 && canWatchReloads) {
+        // instead of jumping to that type's stored value. This has to wait
+        // until the module has connected to our change signals, and must not
+        // happen when the page was swapped by "Reset" or "Defaults".
+        if (row && watching && carried >= 0 && carried !== root.cfg_LoginBlurIntensity) {
+            const target = row;
+            target.pendingPercent = carried;
             Qt.callLater(() => {
-                if (!controller.reloaded && controller.configRoot
-                        && controller.configRoot.cfg_LoginBlurIntensity !== carried) {
-                    controller.configRoot.cfg_LoginBlurIntensity = carried;
+                if (!target || target.pendingPercent < 0) {
+                    return;
+                }
+                const value = target.pendingPercent;
+                target.pendingPercent = -1;
+                if (target.visible && !controller.reloaded && controller.configRoot) {
+                    controller.configRoot.cfg_LoginBlurIntensity = value;
                 }
             });
         }
