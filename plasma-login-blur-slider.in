@@ -1,0 +1,434 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# plasma-login-blur-slider: a blur-intensity setting for the Plasma Login
+# Manager login screen, without patching or rebuilding Plasma Login Manager.
+#
+# How it works
+# ------------
+# Plasma Login Manager shows its wallpaper with an ordinary Plasma wallpaper
+# plugin (a directory of QML under /usr/share/plasma/wallpapers/<id>), and the
+# "Login Screen" settings page embeds that plugin's own configuration page.
+# Plugins are looked up along XDG_DATA_DIRS, where /usr/local/share comes
+# before /usr/share.
+#
+# "sync" therefore creates a small overlay plugin with the same id in
+# /usr/local/share/plasma/wallpapers/<id>. The overlay contains no copy of the
+# stock QML: its main.qml and config.qml *inherit* from the stock files
+# (through stock/qmldir) and only add
+#   * a LoginBlurIntensity setting (merged into a copy of the plugin's schema),
+#   * a slider for it that shows up in the Login Screen settings only, and
+#   * a hook that scales the login screen's blur by that setting.
+# Deleting the overlay ("remove") brings the stock plugin back untouched.
+
+set -euo pipefail
+umask 022
+
+readonly PROG=plasma-login-blur-slider
+readonly VERSION=@VERSION@
+readonly MARKER=.plasma-login-blur-slider
+readonly KEY=LoginBlurIntensity
+
+DATADIR=${PLASMA_LOGIN_BLUR_SLIDER_DATADIR:-@DATADIR@}
+CONFFILE=${PLASMA_LOGIN_BLUR_SLIDER_CONF:-/etc/plasma-login-blur-slider.conf}
+
+# --- defaults; override any of these in /etc/plasma-login-blur-slider.conf ---
+
+# Wallpaper plugins to overlay (those Plasma Login Manager offers as
+# "Wallpaper type"). Ids that are not installed are skipped. Use "all" to
+# overlay every plugin found in STOCK_ROOT.
+PLUGINS="org.kde.image org.kde.color org.kde.potd org.kde.haenau org.kde.hunyango org.kde.tiled online.knowmad.shaderwallpaper"
+# Where the distribution installs wallpaper plugins.
+STOCK_ROOT=/usr/share/plasma/wallpapers
+# Where the overlays go. Its "…/share" directory must come before the one of
+# STOCK_ROOT in XDG_DATA_DIRS (true for /usr/local/share on common setups).
+OVERLAY_ROOT=/usr/local/share/plasma/wallpapers
+# Plasma Login Manager's configuration file (used by "get" and "set").
+LOGIN_CONFIG=/etc/plasmalogin.conf
+
+QUIET=0
+
+msg()  { [ "$QUIET" = 1 ] || printf '%s\n' "$*"; }
+warn() { printf '%s: %s\n' "$PROG" "$*" >&2; }
+die()  { warn "$*"; exit 1; }
+
+usage() {
+    cat <<EOF
+Usage: $PROG <command> [options]
+
+Commands:
+  sync            Create or refresh the wallpaper overlays (run as root).
+                  Safe to run at any time; run it after Plasma updates.
+  remove          Delete all overlays, restoring the stock plugins (as root).
+  status          Show what is installed and the current blur intensity.
+  get             Print the blur intensity (0-100) of the login wallpaper.
+  set <0-100>     Set the blur intensity of the login wallpaper (as root).
+                  Same as moving the slider in System Settings > Login Screen
+                  > Configure Appearance.
+
+Options:
+  -q, --quiet     Only print warnings and errors.
+  -h, --help      Show this help.
+  -V, --version   Show the version.
+
+Settings can be overridden in $CONFFILE
+(PLUGINS, STOCK_ROOT, OVERLAY_ROOT, LOGIN_CONFIG).
+EOF
+}
+
+load_conf() {
+    if [ -r "$CONFFILE" ]; then
+        # shellcheck disable=SC1090
+        . "$CONFFILE"
+    fi
+    STOCK_ROOT=${STOCK_ROOT%/}
+    OVERLAY_ROOT=${OVERLAY_ROOT%/}
+}
+
+need_root() {
+    [ "$(id -u)" = 0 ] || die "this command must be run as root"
+}
+
+is_ours() {
+    [ -f "$1/$MARKER" ]
+}
+
+# The plugin ids to overlay, one per line.
+selected_plugins() {
+    if [ "$PLUGINS" = all ]; then
+        local d
+        for d in "$STOCK_ROOT"/*/; do
+            [ -d "$d" ] && basename "$d"
+        done
+    else
+        printf '%s\n' $PLUGINS
+    fi
+}
+
+remove_overlay() {
+    local target=$1
+    is_ours "$target" || return 0
+    rm -rf -- "$target"
+}
+
+# Write the plugin's settings schema plus our entry to $2. $1 is the stock
+# schema (which may not exist).
+write_schema() {
+    local stock=$1 out=$2
+    local group
+    group=$(cat <<EOF
+  <group name="General">
+    <entry name="$KEY" type="Int">
+      <label>Blur intensity of the wallpaper on the Plasma login screen, in percent (added by $PROG)</label>
+      <default>100</default>
+      <min>0</min>
+      <max>100</max>
+    </entry>
+  </group>
+EOF
+)
+    if [ ! -f "$stock" ]; then
+        {
+            printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
+            printf '%s\n' '<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0">'
+            printf '%s\n' '  <kcfgfile name=""/>'
+            printf '%s\n' "$group"
+            printf '%s\n' '</kcfg>'
+        } > "$out"
+        return 0
+    fi
+
+    if grep -q "name=\"$KEY\"" "$stock"; then
+        cp -- "$stock" "$out"
+        return 0
+    fi
+
+    # Insert our group right before the last "</kcfg>".
+    GROUP=$group awk '
+        { buf = buf $0 "\n" }
+        END {
+            pos = 0
+            while ((p = index(substr(buf, pos + 1), "</kcfg>")) > 0) {
+                pos += p
+            }
+            if (pos == 0) {
+                exit 1
+            }
+            printf "%s%s\n%s", substr(buf, 1, pos - 1), ENVIRON["GROUP"], substr(buf, pos)
+        }
+    ' "$stock" > "$out" || return 1
+
+    grep -q "name=\"$KEY\"" "$out"
+}
+
+# Create or refresh the overlay for one plugin id.
+build_overlay() {
+    local id=$1
+    local stock=$STOCK_ROOT/$id
+    local target=$OVERLAY_ROOT/$id
+
+    if [ ! -f "$stock/metadata.json" ] || [ ! -f "$stock/contents/ui/main.qml" ]; then
+        # Not installed (or not a plain QML wallpaper plugin): nothing to
+        # overlay, and an overlay left over from before would be broken.
+        if is_ours "$target"; then
+            remove_overlay "$target"
+            msg "  $id: stock plugin is gone, overlay removed"
+        fi
+        return 0
+    fi
+
+    if [ -e "$target" ] && ! is_ours "$target"; then
+        warn "$target exists and was not created by $PROG; leaving it alone"
+        return 0
+    fi
+
+    local stock_ui overlay_root_real
+    stock_ui=$(readlink -f -- "$stock/contents/ui")
+    overlay_root_real=$(readlink -f -- "$OVERLAY_ROOT")
+
+    case "$stock_ui$overlay_root_real$id" in
+        *[[:space:]]*)
+            warn "$id: paths containing whitespace are not supported; skipped"
+            return 0
+            ;;
+    esac
+    case "$stock_ui/" in
+        "$overlay_root_real"/*)
+            warn "$id: STOCK_ROOT and OVERLAY_ROOT resolve to the same place; skipped"
+            return 0
+            ;;
+    esac
+
+    local tmp=$OVERLAY_ROOT/.$id.$PROG.$$
+    rm -rf -- "$tmp"
+    mkdir -p -- "$tmp/contents/config" "$tmp/contents/ui/stock" "$tmp/contents/ui/plmblur"
+
+    {
+        printf '# Created by %s %s.\n' "$PROG" "$VERSION"
+        printf '# This directory overlays the wallpaper plugin below. Delete it (or run\n'
+        printf '# "%s remove") to get the stock plugin back.\n' "$PROG"
+        printf 'source=%s\n' "$stock"
+    } > "$tmp/$MARKER"
+
+    # The plugin keeps its id, name and translations.
+    cp -- "$stock/metadata.json" "$tmp/metadata.json"
+
+    # Settings schema: the stock one plus LoginBlurIntensity.
+    if ! write_schema "$stock/contents/config/main.xml" "$tmp/contents/config/main.xml"; then
+        warn "$id: could not extend the settings schema; skipped"
+        rm -rf -- "$tmp"
+        return 0
+    fi
+
+    # stock/qmldir gives the stock main.qml/config.qml a type name our wrappers
+    # can inherit from. qmldir wants paths relative to its own directory, and
+    # KPackage hands out canonical paths, so climb up from the canonical
+    # location of <overlay>/contents/ui/stock to "/".
+    local qmldir_dir=$overlay_root_real/$id/contents/ui/stock
+    local up="" rest=${qmldir_dir#/}
+    while [ -n "$rest" ]; do
+        up="../$up"
+        case "$rest" in
+            */*) rest=${rest#*/} ;;
+            *) rest="" ;;
+        esac
+    done
+    local rel=${up%/}$stock_ui
+
+    {
+        printf '# Generated by %s; points at the stock plugin in %s\n' "$PROG" "$stock"
+        printf 'StockMain 1.0 %s/main.qml\n' "$rel"
+        if [ -f "$stock/contents/ui/config.qml" ]; then
+            printf 'StockConfig 1.0 %s/config.qml\n' "$rel"
+        fi
+    } > "$tmp/contents/ui/stock/qmldir"
+
+    cp -- "$DATADIR/wrappers/main.qml" "$tmp/contents/ui/main.qml"
+    if [ -f "$stock/contents/ui/config.qml" ]; then
+        cp -- "$DATADIR/wrappers/config.qml" "$tmp/contents/ui/config.qml"
+    else
+        cp -- "$DATADIR/wrappers/config-standalone.qml" "$tmp/contents/ui/config.qml"
+    fi
+    cp -- "$DATADIR"/qml/*.qml "$tmp/contents/ui/plmblur/"
+
+    # While the old overlay is gone and the new one is not yet in place, the
+    # stock plugin is found instead, so there is never a broken state.
+    remove_overlay "$target"
+    mv -- "$tmp" "$target"
+    msg "  $id: overlay ready"
+}
+
+cmd_sync() {
+    need_root
+    [ -f "$DATADIR/wrappers/main.qml" ] || die "data files not found in $DATADIR"
+    if [ ! -d "$STOCK_ROOT" ]; then
+        warn "$STOCK_ROOT does not exist; nothing to do"
+        return 0
+    fi
+
+    mkdir -p -- "$OVERLAY_ROOT"
+    msg "Refreshing wallpaper overlays in $OVERLAY_ROOT"
+
+    local id wanted
+    wanted=$(selected_plugins)
+    for id in $wanted; do
+        build_overlay "$id"
+    done
+
+    # Drop overlays of plugins that are no longer selected, and leftovers of
+    # interrupted runs.
+    local d
+    for d in "$OVERLAY_ROOT"/*/ "$OVERLAY_ROOT"/.*."$PROG".*/; do
+        [ -d "$d" ] || continue
+        d=${d%/}
+        id=$(basename "$d")
+        case "$id" in
+            .*."$PROG".*)
+                rm -rf -- "$d"
+                continue
+                ;;
+        esac
+        is_ours "$d" || continue
+        if ! printf '%s\n' $wanted | grep -qxF -- "$id"; then
+            remove_overlay "$d"
+            msg "  $id: no longer selected, overlay removed"
+        fi
+    done
+}
+
+cmd_remove() {
+    need_root
+    [ -d "$OVERLAY_ROOT" ] || return 0
+
+    local d
+    for d in "$OVERLAY_ROOT"/*/ "$OVERLAY_ROOT"/.*."$PROG".*/; do
+        [ -d "$d" ] || continue
+        d=${d%/}
+        case "$(basename "$d")" in
+            .*."$PROG".*)
+                rm -rf -- "$d"
+                continue
+                ;;
+        esac
+        if is_ours "$d"; then
+            remove_overlay "$d"
+            msg "  $(basename "$d"): overlay removed"
+        fi
+    done
+
+    # Tidy up the directories "sync" may have created, if they are empty now.
+    rmdir -- "$OVERLAY_ROOT" 2>/dev/null || true
+    rmdir -- "$(dirname "$OVERLAY_ROOT")" 2>/dev/null || true
+}
+
+login_plugin() {
+    kreadconfig6 --file "$LOGIN_CONFIG" --group Greeter --key WallpaperPluginId --default org.kde.image
+}
+
+cmd_get() {
+    command -v kreadconfig6 >/dev/null || die "kreadconfig6 not found"
+    kreadconfig6 --file "$LOGIN_CONFIG" --group Greeter --group Wallpaper \
+        --group "$(login_plugin)" --group General --key "$KEY" --default 100
+}
+
+cmd_set() {
+    local value=${1:-}
+    case "$value" in
+        ''|*[!0-9]*) die "set: expected a number from 0 to 100" ;;
+    esac
+    [ "$value" -le 100 ] || die "set: expected a number from 0 to 100"
+    need_root
+    command -v kwriteconfig6 >/dev/null || die "kwriteconfig6 not found"
+
+    local plugin
+    plugin=$(login_plugin)
+    kwriteconfig6 --file "$LOGIN_CONFIG" --group Greeter --group Wallpaper \
+        --group "$plugin" --group General --key "$KEY" "$value"
+    chmod 644 -- "$LOGIN_CONFIG"
+    msg "Blur intensity for the login wallpaper ($plugin) set to $value%."
+    if ! is_ours "$OVERLAY_ROOT/$plugin"; then
+        warn "there is no overlay for $plugin, so this setting has no effect yet (run \"$PROG sync\")"
+    fi
+}
+
+cmd_status() {
+    msg "$PROG $VERSION"
+    msg "Stock plugins: $STOCK_ROOT"
+    msg "Overlays:      $OVERLAY_ROOT"
+
+    local id state
+    for id in $(selected_plugins); do
+        if is_ours "$OVERLAY_ROOT/$id"; then
+            state="overlay active"
+            [ -f "$STOCK_ROOT/$id/contents/ui/main.qml" ] || state="overlay BROKEN (stock plugin missing; run \"$PROG sync\")"
+        elif [ -e "$OVERLAY_ROOT/$id" ]; then
+            state="not managed (a different override exists in $OVERLAY_ROOT)"
+        elif [ -f "$STOCK_ROOT/$id/contents/ui/main.qml" ]; then
+            state="no overlay (run \"$PROG sync\")"
+        else
+            state="not installed"
+        fi
+        msg "  $(printf '%-32s' "$id") $state"
+    done
+
+    if command -v kreadconfig6 >/dev/null; then
+        msg "Login wallpaper type: $(login_plugin)"
+        msg "Blur intensity:       $(cmd_get)%"
+    fi
+
+    # Plugins are looked up along XDG_DATA_DIRS; the overlay has to come first.
+    local overlay_base=${OVERLAY_ROOT%/plasma/wallpapers}
+    local stock_base=${STOCK_ROOT%/plasma/wallpapers}
+    local dirs=${XDG_DATA_DIRS:-/usr/local/share:/usr/share}
+    local dir overlay_pos=0 stock_pos=0 n=0
+    local IFS=:
+    for dir in $dirs; do
+        n=$((n + 1))
+        dir=${dir%/}
+        [ "$dir" = "$overlay_base" ] && [ "$overlay_pos" = 0 ] && overlay_pos=$n
+        [ "$dir" = "$stock_base" ] && [ "$stock_pos" = 0 ] && stock_pos=$n
+    done
+    unset IFS
+    if [ "$overlay_pos" = 0 ]; then
+        warn "$overlay_base is not in this session's XDG_DATA_DIRS; the overlays will not be found"
+    elif [ "$stock_pos" != 0 ] && [ "$overlay_pos" -gt "$stock_pos" ]; then
+        warn "$overlay_base comes after $stock_base in this session's XDG_DATA_DIRS; the overlays will not be used"
+    else
+        msg "Search order:         OK ($overlay_base is searched before $stock_base in this session)"
+    fi
+}
+
+main() {
+    local cmd="" args=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -q|--quiet) QUIET=1 ;;
+            -h|--help) usage; exit 0 ;;
+            -V|--version) printf '%s %s\n' "$PROG" "$VERSION"; exit 0 ;;
+            -*) die "unknown option: $1 (see --help)" ;;
+            *)
+                if [ -z "$cmd" ]; then
+                    cmd=$1
+                else
+                    args+=("$1")
+                fi
+                ;;
+        esac
+        shift
+    done
+
+    load_conf
+
+    case "$cmd" in
+        sync) cmd_sync ;;
+        remove) cmd_remove ;;
+        status) cmd_status ;;
+        get) cmd_get ;;
+        set) cmd_set "${args[0]:-}" ;;
+        '') usage; exit 1 ;;
+        *) die "unknown command: $cmd (see --help)" ;;
+    esac
+}
+
+main "$@"
