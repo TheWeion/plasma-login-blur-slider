@@ -2,7 +2,7 @@
 
 Adds a **Blur intensity** slider to *System Settings → Login Screen →
 Configure Appearance…*, so you can choose how strongly Plasma Login Manager
-blurs the wallpaper behind the login prompt — from 0 % (no blur) to 100 %
+blurs the wallpaper behind the login prompt: from 0 % (no blur) to 100 %
 (the stock look).
 
 Plasma Login Manager itself is not patched, replaced or rebuilt, and nothing
@@ -47,7 +47,7 @@ The same from a terminal:
 
     sudo pacman -R plasma-login-blur-slider
 
-(or `sudo make uninstall`). This restores the stock behaviour completely. The
+(or `sudo make uninstall`). This restores the stock behaviour completely. A
 leftover `LoginBlurIntensity=` line in `/etc/plasmalogin.conf` is ignored by
 Plasma and disappears the next time you press *Apply* in the Login Screen
 settings.
@@ -56,6 +56,8 @@ If wallpapers ever misbehave and you suspect this package, this brings the
 stock wallpaper plugins back immediately, without uninstalling anything:
 
     sudo plasma-login-blur-slider remove
+
+(`sudo plasma-login-blur-slider sync` turns it back on.)
 
 ## How it works
 
@@ -76,7 +78,7 @@ stock files and add three things:
   inside Plasma Login Manager's wallpaper process.
 
 The desktop and the lock screen find the same overlay plugins, but for them
-it behaves exactly like the stock plugin.
+they behave exactly like the stock plugins.
 
 Everything the package creates outside its own files is in
 `/usr/local/share/plasma/wallpapers/`, one directory per wallpaper type, each
@@ -85,9 +87,9 @@ not create are never touched.
 
 ## Good to know
 
-* **Only the blur changes.** The login screen also tones the wallpaper's
-  colours down a little so the text stays readable; that stays as it is, even
-  at 0 %.
+* **Only the blur changes.** The login screen also adjusts the wallpaper's
+  colours a little so the text stays readable; that stays as it is, even at
+  0 %.
 * The value is stored with the settings of the chosen wallpaper type. When
   you switch the type in the Login Screen settings, the slider keeps its
   position.
@@ -97,20 +99,26 @@ not create are never touched.
   they are installed system-wide: `org.kde.image`, `org.kde.color`,
   `org.kde.potd`, `org.kde.haenau`, `org.kde.hunyango`, `org.kde.tiled`,
   `online.knowmad.shaderwallpaper`. To change the list, set `PLUGINS="…"` in
-  `/etc/plasma-login-blur-slider.conf` and run `sudo plasma-login-blur-slider
-  sync`.
+  `/etc/plasma-login-blur-slider.conf` and run
+  `sudo plasma-login-blur-slider sync`.
 * `/usr/local/share` has to come before `/usr/share` in `XDG_DATA_DIRS`,
   which is the default. `plasma-login-blur-slider status` checks this for the
   session it is run in.
+* Switching the wallpaper type in the Login Screen settings logs a few
+  harmless warnings from Kirigami's FormLayout while the old slider row is
+  removed.
 * The hook relies on how Plasma Login Manager builds its wallpaper scene, and
   the slider on how its settings page is laid out. If a future release
   changes either, the affected part quietly does nothing and you are back to
   stock behaviour; the login screen itself is not affected.
 
-## Tested with
+## Files
 
-Plasma Login Manager 6.7.5 (Plasma 6.7.5, KDE Frameworks 6.30, Qt 6.11) on
-Arch Linux packages.
+    /usr/bin/plasma-login-blur-slider             the sync/remove/get/set tool
+    /usr/share/plasma-login-blur-slider/          QML the overlays are made from
+    /usr/share/libalpm/hooks/plasma-login-blur-slider.hook    (Arch-based)
+    /usr/lib/systemd/system/plasma-login-blur-slider.service  (other distros)
+    /etc/plasma-login-blur-slider.conf            optional overrides
 
 ## License
 
