@@ -4,23 +4,18 @@
 */
 
 import QtQuick
-import QtQuick.Controls as QQC2
-import QtQuick.Layouts
-
-import org.kde.kcmutils as KCM
-import org.kde.kirigami as Kirigami
 
 /*
  * Owned by a wallpaper plugin's configuration page (see wrappers/config.qml).
  *
  * When that page is shown inside Plasma Login Manager's "Login Screen"
- * settings module, this adds a "Blur intensity" row to the module's own form,
- * right below "Wallpaper type". The value is kept in the wallpaper's
- * cfg_LoginBlurIntensity property, so the module saves and restores it like
- * any other wallpaper setting.
+ * settings module, this adds a "Blur intensity" row (LoginBlurRow.qml) to the
+ * module's own form, right below "Wallpaper type". The value lives in the
+ * page's cfg_LoginBlurIntensity property, so the module loads, saves and
+ * resets it like any other wallpaper setting.
  *
  * In every other host (desktop wallpaper dialog, Screen Locking settings) it
- * does nothing.
+ * does nothing, and does not even load the row's QML.
  */
 QtObject {
     id: controller
@@ -47,62 +42,6 @@ QtObject {
 
     property Item row: null
 
-    readonly property Component rowComponent: Component {
-        RowLayout {
-            objectName: controller.rowObjectName
-
-            Kirigami.FormData.label: i18nd("plasma-login-blur-slider", "Blur intensity:")
-            Kirigami.FormData.buddyFor: slider
-
-            spacing: Kirigami.Units.smallSpacing
-
-            QQC2.Slider {
-                id: slider
-
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 12
-
-                from: 0
-                to: 100
-                stepSize: 5
-                snapMode: QQC2.Slider.SnapAlways
-
-                value: controller.configRoot ? controller.configRoot.cfg_LoginBlurIntensity : 100
-                onMoved: {
-                    if (controller.configRoot) {
-                        controller.configRoot.cfg_LoginBlurIntensity = Math.round(value);
-                    }
-                }
-
-                Accessible.name: i18nd("plasma-login-blur-slider", "Blur intensity")
-
-                QQC2.ToolTip.text: i18nd("plasma-login-blur-slider", "How strongly the wallpaper is blurred behind the login prompt")
-                QQC2.ToolTip.visible: hovered && !pressed
-                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-
-                KCM.SettingHighlighter {
-                    highlight: controller.configRoot !== null
-                        && controller.configRoot.cfg_LoginBlurIntensity !== controller.configRoot.cfg_LoginBlurIntensityDefault
-                }
-            }
-
-            QQC2.Label {
-                readonly property int percent: controller.configRoot ? controller.configRoot.cfg_LoginBlurIntensity : 100
-
-                Layout.minimumWidth: percentMetrics.width
-
-                text: percent <= 0
-                    ? i18ndc("plasma-login-blur-slider", "@info blur is disabled", "Off")
-                    : i18ndc("plasma-login-blur-slider", "@info blur intensity in percent", "%1%", percent)
-                textFormat: Text.PlainText
-
-                TextMetrics {
-                    id: percentMetrics
-                    text: "100%"
-                }
-            }
-        }
-    }
-
     function attach() {
         if (row || !inLoginScreenSettings || !formLayout || !configRoot) {
             return;
@@ -117,7 +56,15 @@ QtObject {
             }
         }
 
-        row = rowComponent.createObject(formLayout);
+        const component = Qt.createComponent("LoginBlurRow.qml");
+        if (component.status !== Component.Ready) {
+            console.warn("plasma-login-blur-slider: cannot create the slider:", component.errorString());
+            return;
+        }
+        row = component.createObject(formLayout, {
+            objectName: rowObjectName,
+            configRoot: configRoot
+        });
     }
 
     onInLoginScreenSettingsChanged: attach()
