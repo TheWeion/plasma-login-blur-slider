@@ -360,8 +360,9 @@ build_overlay() {
 # else, and notes there what it switched off; compositor_restore undoes
 # exactly that.
 
+# The login user's home directory; empty if there is no such user.
 login_home() {
-    getent passwd "$LOGIN_USER" 2>/dev/null | cut -d: -f6
+    getent passwd "$LOGIN_USER" 2>/dev/null | cut -d: -f6 || true
 }
 
 # Run a command as the login screen's user, so that its files stay its own.
@@ -653,7 +654,7 @@ lock_tool() {
         "$@"
         return
     fi
-    home=$(getent passwd "$user" | cut -d: -f6)
+    home=$(getent passwd "$user" | cut -d: -f6) || true
     [ -n "$home" ] || die "user $user has no home directory"
     runuser -u "$user" -- env -i HOME="$home" USER="$user" LOGNAME="$user" \
         PATH=/usr/local/bin:/usr/bin:/bin LANG=C.UTF-8 "$@"
