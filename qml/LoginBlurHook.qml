@@ -48,6 +48,27 @@ QtObject {
     property Item blurItem: null
     property int attempts: 0
 
+    // Diagnostics, switched on with "plasma-login-blur-slider debug on".
+    readonly property bool debugRequested: {
+        const cfg = wallpaperItem ? wallpaperItem.configuration : null;
+        return inLoginHelper && cfg !== null && cfg !== undefined && cfg.LoginBlurDebug === true;
+    }
+    property QtObject debugHelper: null
+
+    function startDebug() {
+        if (debugHelper || !debugRequested) {
+            return;
+        }
+        const component = Qt.createComponent("LoginBlurDebug.qml");
+        if (component.status !== Component.Ready) {
+            console.warn("plasma-login-blur-slider: cannot load the diagnostics:", component.errorString());
+            return;
+        }
+        debugHelper = component.createObject(hook, { hook: hook });
+    }
+
+    onDebugRequestedChanged: startDebug()
+
     // Depth-first search for the effect that uses our wallpaper as its source.
     function findBlur(node, depth) {
         if (!node || depth > 8) {
@@ -119,5 +140,8 @@ QtObject {
         }
     }
 
-    Component.onCompleted: tryHook()
+    Component.onCompleted: {
+        tryHook();
+        startDebug();
+    }
 }

@@ -20,6 +20,9 @@ Item {
 
     property int cfg_LoginBlurIntensity: 100
     property int cfg_LoginBlurIntensityDefault: 100
+    // Diagnostics switch ("plasma-login-blur-slider debug on"); no UI.
+    property bool cfg_LoginBlurDebug: false
+    property bool cfg_LoginBlurDebugDefault: false
 
     readonly property QtObject plasmaLoginBlurConfig: PlmBlur.LoginBlurConfig {
         configRoot: plasmaLoginBlurWrapper

@@ -65,6 +65,24 @@ stock wallpaper plugins back immediately, without uninstalling anything:
 
 (`sudo plasma-login-blur-slider sync` turns it back on.)
 
+## If it does not work
+
+    sudo plasma-login-blur-slider debug on
+
+then restart, and at the login screen wait ten seconds, move the mouse so the
+password prompt appears, and leave everything alone for twenty seconds until
+the prompt is gone again. Log in and run
+
+    sudo plasma-login-blur-slider report
+
+This writes a folder `plasma-login-blur-report` to your home directory. It
+contains `report.txt` (versions, the login screen's configuration, what the
+login wallpaper process and the compositor logged) and a few screenshots the
+wallpaper process took of its own output. Together they show whether the blur
+you see is the one this add-on controls or comes from somewhere else, for
+example a compositor effect. `sudo plasma-login-blur-slider debug off`
+switches the diagnostics off again.
+
 ## How it works
 
 The login screen draws its wallpaper with an ordinary Plasma wallpaper plugin
@@ -131,7 +149,7 @@ against it, built from source on the same system.
 
 ## Files
 
-    /usr/bin/plasma-login-blur-slider             the sync/remove/get/set tool
+    /usr/bin/plasma-login-blur-slider             the sync/remove/get/set/debug/report tool
     /usr/share/plasma-login-blur-slider/          QML the overlays are made from
     /usr/share/libalpm/hooks/plasma-login-blur-slider.hook    (Arch-based)
     /usr/lib/systemd/system/plasma-login-blur-slider.service  (other distros)

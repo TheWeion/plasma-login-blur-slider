@@ -66,6 +66,11 @@ Commands:
   set <0-100>     Set the blur intensity of the login wallpaper (as root).
                   Same as moving the slider in System Settings > Login Screen
                   > Configure Appearance.
+  debug on|off    Switch diagnostics on or off (as root). While on, the login
+                  wallpaper process logs what it is doing and saves
+                  screenshots of its own output to /tmp at every start.
+  report          Collect everything needed to diagnose a problem into a
+                  folder in your home directory (as root).
 
 Options:
   -q, --quiet     Only print warnings and errors.
@@ -143,6 +148,10 @@ write_schema() {
       <default>100</default>
       <min>0</min>
       <max>100</max>
+    </entry>
+    <entry name="LoginBlurDebug" type="Bool">
+      <label>Write diagnostics about the login wallpaper to the journal and /tmp (added by $PROG)</label>
+      <default>false</default>
     </entry>
   </group>
 EOF
@@ -408,6 +417,196 @@ cmd_set() {
     fi
 }
 
+cmd_debug() {
+    local mode=${1:-}
+    case "$mode" in
+        on|off) ;;
+        *) die "debug: expected \"on\" or \"off\"" ;;
+    esac
+    need_root
+    command -v kwriteconfig6 >/dev/null || die "kwriteconfig6 not found"
+
+    local plugin
+    plugin=$(login_plugin)
+    if [ "$mode" = on ]; then
+        kwriteconfig6 --file "$LOGIN_CONFIG" --group Greeter --group Wallpaper \
+            --group "$plugin" --group General --key LoginBlurDebug --type bool true
+        chmod 644 -- "$LOGIN_CONFIG"
+        rm -f /tmp/"$PROG"-*.png
+        msg "Diagnostics are on. Now:"
+        msg "  1. Restart the computer."
+        msg "  2. At the login screen, wait 10 seconds, then move the mouse so the"
+        msg "     password prompt appears, then leave everything alone for 20 seconds"
+        msg "     until the prompt has disappeared again."
+        msg "  3. Log in and run: sudo $PROG report"
+    else
+        kwriteconfig6 --file "$LOGIN_CONFIG" --group Greeter --group Wallpaper \
+            --group "$plugin" --group General --key LoginBlurDebug --delete
+        chmod 644 -- "$LOGIN_CONFIG"
+        rm -f /tmp/"$PROG"-*.png
+        msg "Diagnostics are off."
+    fi
+    if ! is_ours "$OVERLAY_ROOT/$plugin"; then
+        warn "there is no overlay for $plugin (run \"$PROG sync\")"
+    fi
+}
+
+# Print the pixel size of a PNG without needing any image tools.
+png_size() {
+    local w h
+    [ "$(od -A n -t x1 -N 4 -- "$1" 2>/dev/null | tr -d ' \n')" = 89504e47 ] || return 1
+    w=$(od -A n -t u1 -j 16 -N 4 -- "$1" | awk '{print (($1 * 256 + $2) * 256 + $3) * 256 + $4}')
+    h=$(od -A n -t u1 -j 20 -N 4 -- "$1" | awk '{print (($1 * 256 + $2) * 256 + $3) * 256 + $4}')
+    printf '%sx%s' "$w" "$h"
+}
+
+describe_image() {
+    local f=$1
+    if [ ! -e "$f" ]; then
+        printf '%s: does not exist\n' "$f"
+        return 0
+    fi
+    ls -ld -- "$f"
+    if [ -f "$f" ]; then
+        if png_size "$f" >/dev/null 2>&1; then
+            printf '  PNG, %s pixels\n' "$(png_size "$f")"
+        elif command -v file >/dev/null; then
+            printf '  %s\n' "$(file -b -- "$f")"
+        fi
+    elif [ -d "$f" ]; then
+        find "$f" -type f | head -n 20
+    fi
+}
+
+show_file() {
+    local f=$1 limit=${2:-80}
+    [ -f "$f" ] || return 0
+    printf -- '--- %s\n' "$f"
+    head -n "$limit" -- "$f"
+    printf '\n'
+}
+
+cmd_report() {
+    need_root
+
+    # Collect as much as possible: a command that fails or a file that is
+    # missing must not stop the report.
+    set +e
+    set +o pipefail
+
+    local user=${SUDO_USER:-root} userhome dir login_home login_uid
+    userhome=$(getent passwd "$user" | cut -d: -f6)
+    [ -d "$userhome" ] || userhome=/root
+    dir=$userhome/plasma-login-blur-report
+    login_home=$(getent passwd plasmalogin | cut -d: -f6)
+    login_uid=$(id -u plasmalogin 2>/dev/null || true)
+
+    rm -rf -- "$dir"
+    mkdir -p -- "$dir"
+
+    {
+        printf '===== %s report, %s =====\n' "$PROG" "$(date)"
+
+        printf '\n===== Versions =====\n'
+        uname -r
+        if command -v pacman >/dev/null; then
+            local pkg
+            for pkg in "$PROG" plasma-login-manager plasma-workspace kwin libplasma kirigami \
+                qt6-base qt6-declarative qt6-5compat layer-shell-qt; do
+                pacman -Q "$pkg" 2>/dev/null
+            done
+        fi
+
+        printf '\n===== Display manager =====\n'
+        local unit
+        for unit in plasmalogin sddm; do
+            printf '%s: %s\n' "$unit" "$(systemctl is-active "$unit" 2>&1)"
+        done
+
+        printf '\n===== Graphics =====\n'
+        if command -v lspci >/dev/null; then
+            lspci -nnk 2>/dev/null | grep -A 3 -E 'VGA|3D controller|Display controller' | head -n 24
+        fi
+
+        printf '\n===== Add-on status =====\n'
+        cmd_status 2>&1
+
+        printf '\n===== Login screen configuration =====\n'
+        local f
+        for f in "$LOGIN_CONFIG" "$LOGIN_CONFIG".d/* /usr/lib/plasmalogin/defaults.conf /usr/lib/plasmalogin/plasmalogin.conf.d/*; do
+            show_file "$f" 60
+        done
+
+        printf '\n===== Login wallpaper picture =====\n'
+        local image
+        image=$(login_config_read "" --group Greeter --group Wallpaper --group "$(login_plugin)" --group General --key Image)
+        printf 'configured: %s\n' "${image:-(not set, default picture)}"
+        image=${image#file://}
+        image=${image%%#*}
+        [ -n "$image" ] && describe_image "$image"
+        if [ -n "$login_home" ]; then
+            ls -la -- "$login_home/wallpapers" 2>&1
+        fi
+
+        printf '\n===== Settings of the login screen user (%s) =====\n' "$login_home"
+        if [ -n "$login_home" ]; then
+            ls -la -- "$login_home" "$login_home/.config" "$login_home/.config/kdedefaults" 2>&1
+            for f in kwinrc kdeglobals plasmarc kwinoutputconfig.json kdedefaults/kwinrc kdedefaults/kdeglobals kdedefaults/plasmarc kdedefaults/package; do
+                show_file "$login_home/.config/$f" 70
+            done
+            if [ -d "$login_home/.local/share" ]; then
+                printf -- '--- %s/.local/share\n' "$login_home"
+                find "$login_home/.local/share" -maxdepth 3 | head -n 40
+            fi
+        fi
+
+        printf '\n===== System-wide KDE defaults =====\n'
+        for f in /etc/xdg/kwinrc /etc/xdg/kdeglobals /etc/xdg/plasmarc; do
+            show_file "$f" 60
+        done
+
+        printf '\n===== KWin effects and scripts installed =====\n'
+        ls /usr/lib/qt6/plugins/kwin/effects/plugins /usr/lib/qt6/plugins/kwin/plugins 2>&1
+        ls /usr/share/kwin/effects /usr/share/kwin/scripts /usr/share/kwin-wayland/effects /usr/share/kwin-wayland/scripts 2>/dev/null
+
+        printf '\n===== Related packages =====\n'
+        if command -v pacman >/dev/null; then
+            pacman -Qq | grep -i -E 'blur|kwin|kvantum|wallpaper|plasma-keyboard|plymouth' 
+        fi
+
+        printf '\n===== Wallpaper plugins =====\n'
+        ls -la -- "$STOCK_ROOT" "$OVERLAY_ROOT" 2>&1
+
+        if command -v journalctl >/dev/null; then
+            printf '\n===== Login wallpaper process, this boot =====\n'
+            journalctl -b 0 --no-pager -o short-precise 2>/dev/null \
+                | grep -E 'plasma-login-wallpaper\[|plasma-login-blur-slider' | grep -v 'Found snapshot' | tail -n 450
+            printf '\n===== Login wallpaper process, previous boot =====\n'
+            journalctl -b -1 --no-pager -o short-precise 2>/dev/null \
+                | grep -E 'plasma-login-wallpaper\[|plasma-login-blur-slider' | grep -v 'Found snapshot' | tail -n 80
+            if [ -n "$login_uid" ]; then
+                printf '\n===== Login screen session, warnings this boot =====\n'
+                journalctl -b 0 --no-pager -o short-precise -p warning _UID="$login_uid" 2>/dev/null | tail -n 60
+            fi
+        fi
+
+        printf '\n===== Screenshots saved by the wallpaper process =====\n'
+        local shot found=0
+        for shot in /tmp/"$PROG"-*.png; do
+            [ -f "$shot" ] || continue
+            found=1
+            describe_image "$shot"
+            cp -- "$shot" "$dir/" 2>&1
+        done
+        [ "$found" = 1 ] || printf 'none (diagnostics not on, or the login screen has not been started since)\n'
+    } > "$dir/report.txt" 2>&1
+
+    chown -R -- "$user": "$dir" 2>/dev/null || true
+    msg "Report written to $dir"
+    msg "  report.txt        text report"
+    ls -- "$dir" | grep -v '^report.txt$' | sed 's/^/  /'
+}
+
 cmd_status() {
     msg "$PROG $VERSION"
     msg "Stock plugins: $STOCK_ROOT"
@@ -482,6 +681,8 @@ main() {
         status) cmd_status ;;
         get) cmd_get ;;
         set) cmd_set "${args[0]:-}" ;;
+        debug) cmd_debug "${args[0]:-}" ;;
+        report) cmd_report ;;
         '') usage; exit 1 ;;
         *) die "unknown command: $cmd (see --help)" ;;
     esac
