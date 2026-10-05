@@ -54,6 +54,8 @@ Open *System Settings → Login Screen → Configure Appearance…*, pick a **Bl
 style**, move the **Blur intensity** slider and press *Apply*. The change
 shows the next time the login screen starts (log out or reboot).
 
+![kde_login_screen.png](public/img/kde_login_screen.png)
+
 The same from a terminal:
 
     plasma-login-blur-slider get              # intensity, prints 0-100
@@ -61,6 +63,8 @@ The same from a terminal:
     plasma-login-blur-slider style            # prints standard or frosted
     sudo plasma-login-blur-slider style frosted
     plasma-login-blur-slider status           # what is installed, current settings
+
+![kde_screen_locking.png](public/img/kde_screen_locking.png)
 
 The lock screen is set up the same way in *System Settings → Screen Locking →
 Configure Appearance…*, and shows the change the next time the screen is
@@ -286,13 +290,8 @@ from a Garuda system that had Better Blur DX enabled for its login screen.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). In short: `make check` lints and runs
-the unit tests, `make package` builds the package into `dist/`, every pull
-request is built and tested and has its package attached, and releases are
-made automatically from the commit messages.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-GPL-3.0-or-later; the text is in [LICENSE](LICENSE). The repository follows
-the [REUSE](https://reuse.software) specification: every file states its
-copyright and its licence.
+GPL-3.0-or-later; the text is in [LICENSE](LICENSE).
