@@ -11,9 +11,9 @@ import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 
 /*
- * The "Blur style" row shown in the Login Screen settings, below the
- * "Blur intensity" row (LoginBlurRow.qml). Created by LoginBlurConfig.qml as
- * a child of the page's Kirigami.FormLayout.
+ * The "Blur style" row shown in the Login Screen and Screen Locking
+ * settings, below the "Blur intensity" row (LoginBlurRow.qml). Created by
+ * LoginBlurConfig.qml as a child of the page's Kirigami.FormLayout.
  */
 RowLayout {
     id: row
@@ -46,7 +46,7 @@ RowLayout {
         valueRole: "value"
         model: [
             {
-                text: i18ndc("plasma-login-blur-slider", "@item:inlistbox the login screen's own blur", "Standard"),
+                text: i18ndc("plasma-login-blur-slider", "@item:inlistbox the screen's own blur", "Standard"),
                 value: "standard"
             },
             {
@@ -70,6 +70,6 @@ RowLayout {
     }
 
     Kirigami.ContextualHelpButton {
-        toolTipText: i18nd("plasma-login-blur-slider", "Standard is the login screen's own blur. Frosted glass is a smooth blur like the blur effect of a desktop compositor, and much stronger at the same intensity: at about 25% it is as strong as Standard at 100%.")
+        toolTipText: i18nd("plasma-login-blur-slider", "Standard is the blur this screen comes with. Frosted glass is a smooth blur like the blur effect of a desktop compositor, and much stronger at the same intensity: at about 25% it is as strong as Standard at 100%.")
     }
 }

@@ -5,8 +5,8 @@
     "plasma-login-blur-slider sync". Do not edit.
 
     The stock wallpaper plugin has no configuration page of its own, so this
-    one only carries the login blur settings and, in the Login Screen
-    settings, their controls.
+    one only carries the blur settings and, in the Login Screen and Screen
+    Locking settings, their controls.
 */
 
 import QtQuick
@@ -31,5 +31,6 @@ Item {
         dialog: typeof configDialog !== "undefined" ? configDialog : null
         formLayout: (typeof appearanceRoot !== "undefined" && appearanceRoot && appearanceRoot.parentLayout)
             ? appearanceRoot.parentLayout : null
+        pageHost: (typeof appearanceRoot !== "undefined" && appearanceRoot) ? appearanceRoot : null
     }
 }

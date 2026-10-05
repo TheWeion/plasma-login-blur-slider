@@ -11,7 +11,8 @@ import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 
 /*
- * The "Blur intensity" row shown in the Login Screen settings.
+ * The "Blur intensity" row shown in the Login Screen and Screen Locking
+ * settings.
  * Created by LoginBlurConfig.qml as a child of the page's Kirigami.FormLayout.
  */
 RowLayout {

@@ -9,14 +9,16 @@ import QtQuick
  * Owned by a wallpaper plugin's configuration page (see wrappers/config.qml).
  *
  * When that page is shown inside Plasma Login Manager's "Login Screen"
- * settings module, this adds a "Blur intensity" row (LoginBlurRow.qml) and a
- * "Blur style" row (LoginBlurStyleRow.qml) to the module's own form, right
- * below "Wallpaper type". The values live in the page's
- * cfg_LoginBlurIntensity and cfg_LoginBlurStyle properties, so the module
- * loads, saves and resets them like any other wallpaper setting.
+ * settings module or inside the "Screen Locking" settings module, this adds
+ * a "Blur intensity" row (LoginBlurRow.qml) and a "Blur style" row
+ * (LoginBlurStyleRow.qml) to the module's own form, right below "Wallpaper
+ * type". The values live in the page's cfg_LoginBlurIntensity and
+ * cfg_LoginBlurStyle properties, so the module loads, saves and resets them
+ * like any other wallpaper setting: the login screen's with the login
+ * screen's wallpaper settings, the lock screen's with the lock screen's.
  *
- * In every other host (desktop wallpaper dialog, Screen Locking settings) it
- * does nothing, and does not even load the rows' QML.
+ * In every other host (the desktop wallpaper dialog) it does nothing, and
+ * does not even load the rows' QML.
  */
 QtObject {
     id: controller
@@ -28,6 +30,8 @@ QtObject {
     property var dialog: null
     // The hosting page's Kirigami.FormLayout.
     property Item formLayout: null
+    // The hosting module's appearance page ("appearanceRoot"), if it has one.
+    property Item pageHost: null
 
     readonly property string rowObjectName: "plasmaLoginBlurSliderRow"
     readonly property string styleRowObjectName: "plasmaLoginBlurStyleRow"
@@ -39,10 +43,27 @@ QtObject {
         && typeof dialog.resetSynchronizedSettings === "function"
         && dialog.sessionModel !== undefined
 
+    // The Screen Locking settings module, by API that only it has.
+    readonly property bool inLockScreenSettings: dialog !== null && dialog !== undefined
+        && !inLoginScreenSettings
+        && dialog.shellConfigFile !== undefined
+        && dialog.wallpaperIntegration !== undefined
+        && dialog.isDefaultsAppearance !== undefined
+        && typeof dialog.forceUpdateState === "function"
+
+    readonly property bool inScreenSettings: inLoginScreenSettings || inLockScreenSettings
+
+    // The Screen Locking module creates every configuration page twice:
+    // first a throw-away instance, as a direct child of its appearance page,
+    // to see which settings the page has, and then the real one inside its
+    // stack view. The throw-away one must leave the form alone, or the real
+    // one would take over the defaults it shows instead of the saved values.
+    readonly property bool throwAway: pageHost !== null && configRoot !== null && configRoot.parent === pageHost
+
     // The module tells us when it reloads or resets its settings; without
     // that we cannot tell a reset from the user picking another wallpaper
     // type (see attach()).
-    readonly property bool canWatchReloads: inLoginScreenSettings
+    readonly property bool canWatchReloads: inScreenSettings
         && typeof dialog.loadCalled === "function"
         && typeof dialog.defaultsCalled === "function"
 
@@ -81,11 +102,12 @@ QtObject {
         // time, which calls this function again through the change handlers
         // below. So read everything before looking at "row": the nested call
         // then does the work and this one sees its result.
-        const inSettings = inLoginScreenSettings;
+        const inSettings = inScreenSettings;
         const watching = canWatchReloads;
         const layout = formLayout;
         const root = configRoot;
-        if (row || styleRow || attaching || !inSettings || !layout || !root) {
+        const scratch = throwAway;
+        if (row || styleRow || attaching || !inSettings || scratch || !layout || !root) {
             return;
         }
         attaching = true;
@@ -155,9 +177,10 @@ QtObject {
         });
     }
 
-    onInLoginScreenSettingsChanged: attach()
+    onInScreenSettingsChanged: attach()
     onFormLayoutChanged: attach()
     onConfigRootChanged: attach()
+    onThrowAwayChanged: attach()
 
     Component.onCompleted: attach()
     Component.onDestruction: {

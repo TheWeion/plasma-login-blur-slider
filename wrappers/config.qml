@@ -5,8 +5,8 @@
     "plasma-login-blur-slider sync". Do not edit.
 
     The configuration page below is the unmodified stock one (stock/qmldir
-    points at its real config.qml). This wrapper only adds the login blur
-    settings and, in the Login Screen settings, their controls.
+    points at its real config.qml). This wrapper only adds the blur settings
+    and, in the Login Screen and Screen Locking settings, their controls.
 */
 
 import QtQuick
@@ -29,5 +29,6 @@ Stock.StockConfig {
         dialog: typeof configDialog !== "undefined" ? configDialog : null
         formLayout: (typeof appearanceRoot !== "undefined" && appearanceRoot && appearanceRoot.parentLayout)
             ? appearanceRoot.parentLayout : null
+        pageHost: (typeof appearanceRoot !== "undefined" && appearanceRoot) ? appearanceRoot : null
     }
 }
