@@ -1,13 +1,18 @@
 # plasma-login-blur-slider
 
-Adds a **Blur intensity** slider to *System Settings → Login Screen →
-Configure Appearance…*, so you can choose how strongly Plasma Login Manager
-blurs the wallpaper behind the login prompt: from 0 % (no blur) to 100 %
-(the stock look).
+Adds a **Blur intensity** slider and a **Blur style** choice to *System
+Settings → Login Screen → Configure Appearance…*, so you can choose how
+Plasma Login Manager blurs the wallpaper behind the login prompt:
+
+* **Standard** is the login screen's own blur, from 0 % (no blur) to 100 %
+  (the stock look).
+* **Frosted glass** is a smooth Gaussian blur, the kind a desktop
+  compositor's blur effect produces. It shows gradually more of the wallpaper
+  as you lower the intensity and goes much further at the top of the scale.
 
 The blur is applied while the password prompt is showing and fades out when
-only the clock is left, as Plasma Login Manager designed it; the slider sets
-how strong it is.
+only the clock is left, as Plasma Login Manager designed it; the settings
+decide what it looks like.
 
 Plasma Login Manager itself is not patched, replaced or rebuilt, and nothing
 is compiled, so the package keeps working across Plasma updates.
@@ -41,21 +46,43 @@ is what the pacman hook does on Arch-based systems.
 
 ## Use
 
-Open *System Settings → Login Screen → Configure Appearance…*, move the
-**Blur intensity** slider and press *Apply*. The change shows the next time
-the login screen starts (log out or reboot).
+Open *System Settings → Login Screen → Configure Appearance…*, pick a **Blur
+style**, move the **Blur intensity** slider and press *Apply*. The change
+shows the next time the login screen starts (log out or reboot).
 
 The same from a terminal:
 
-    plasma-login-blur-slider get          # prints 0-100
+    plasma-login-blur-slider get              # intensity, prints 0-100
     sudo plasma-login-blur-slider set 35
-    plasma-login-blur-slider status       # what is installed, current value
+    plasma-login-blur-slider style            # prints standard or frosted
+    sudo plasma-login-blur-slider style frosted
+    plasma-login-blur-slider status           # what is installed, current settings
 
 Each time the login screen starts, its wallpaper process logs one line such
-as `plasma-login-blur-slider: login wallpaper blur set to 35%`, which is a
-quick way to confirm the setting was picked up:
+as `plasma-login-blur-slider: login wallpaper blur set to 35% (frosted
+glass)`, which is a quick way to confirm the settings were picked up:
 
     journalctl -b | grep plasma-login-blur-slider
+
+### The two styles
+
+The intensity means something different in each style, because frosted glass
+reaches much further:
+
+| | Standard | Frosted glass |
+|---|---|---|
+| What it is | the login screen's own blur, scaled down | a Gaussian blur laid over the wallpaper |
+| 100 % | the stock look | as strong as KWin's blur effect (also Better Blur DX) at strength 12 of 15 |
+| Same strength as the stock look | 100 % | about 25 % |
+| Lower values | the stock effect at a smaller radius | the same smooth blur, proportionally narrower |
+
+In numbers: frosted glass is a Gaussian blur with a standard deviation of
+0.64 pixels per percent, 64 pixels at 100 %. The stock blur comes to about
+14.5 pixels, and KWin's blur effect to about 62 at strength 12 and 90 at its
+maximum.
+
+Standard at 100 % is the default, and with it the login screen looks exactly
+as it does without this package.
 
 ## Compositor blur effects (Better Blur DX and the like)
 
@@ -135,11 +162,20 @@ id into `/usr/local/share/plasma/wallpapers/<id>/`. The overlay contains no
 copy of the stock plugin's code. Its `main.qml` and `config.qml` load the
 stock files and add three things:
 
-* a `LoginBlurIntensity` setting, saved by the Login Screen settings exactly
-  like the wallpaper's other settings (in `/etc/plasmalogin.conf`);
-* the slider, which is only created inside the Login Screen settings;
-* a hook that scales the login screen's blur by that setting. It only acts
+* the settings `LoginBlurIntensity` and `LoginBlurStyle`, saved by the Login
+  Screen settings exactly like the wallpaper's other settings (in
+  `/etc/plasmalogin.conf`);
+* the slider and the style choice, which are only created inside the Login
+  Screen settings;
+* a hook that scales the login screen's blur by the intensity. It only acts
   inside Plasma Login Manager's wallpaper process.
+
+For frosted glass the hook also lays a Gaussian blur of the wallpaper over
+the login screen's own blur, inside the picture the login screen then applies
+its colour adjustment to, and fades it in and out with the prompt. The login
+screen's own blur only carries the transition then. The Gaussian blur is
+computed on a reduced copy of the wallpaper and scaled back up, which makes
+even the widest setting cheap, and only when the wallpaper changes.
 
 The desktop and the lock screen find the same overlay plugins, but for them
 they behave exactly like the stock plugins.
@@ -158,15 +194,19 @@ knows what to switch back on.
 ## Good to know
 
 * **Only the blur changes.** The login screen also adjusts the wallpaper's
-  colours a little so the text stays readable; that stays as it is, even at
-  0 %.
+  colours a little so the text stays readable; that stays as it is, in both
+  styles and even at 0 %.
 * **The blur follows the prompt.** With only the clock on screen the
   wallpaper is not blurred at any setting. The login screen usually starts
   with the prompt showing, for about ten seconds if nothing is touched, so it
   usually starts out blurred.
-* The value is stored with the settings of the chosen wallpaper type. When
-  you switch the type in the Login Screen settings, the slider keeps its
-  position.
+* Both settings are stored with the settings of the chosen wallpaper type.
+  When you switch the type in the Login Screen settings, the slider and the
+  style keep what they were set to.
+* Frosted glass measures in pixels, like the stock blur and like a
+  compositor's, so the same setting looks stronger on a screen with fewer of
+  them. On a scaled (HiDPI) screen these are the scaled pixels: the blur
+  looks the same as on an unscaled screen of the same effective resolution.
 * The slider moves in steps of 5 %; `set` accepts any whole number from 0 to
   100.
 * Wallpaper types are overlaid only if Plasma Login Manager offers them and
@@ -179,7 +219,7 @@ knows what to switch back on.
   which is the default. `plasma-login-blur-slider status` checks this for the
   session it is run in.
 * Switching the wallpaper type in the Login Screen settings logs a few
-  harmless warnings from Kirigami's FormLayout while the old slider row is
+  harmless warnings from Kirigami's FormLayout while the old rows are
   removed.
 * The hook relies on how Plasma Login Manager builds its wallpaper scene, and
   the slider on how its settings page is laid out. If a future release
@@ -202,7 +242,7 @@ from a Garuda system that had Better Blur DX enabled for its login screen.
 
 ## Files
 
-    /usr/bin/plasma-login-blur-slider             the sync/remove/get/set/debug/report tool
+    /usr/bin/plasma-login-blur-slider             the sync/remove/get/set/style/debug/report tool
     /usr/share/plasma-login-blur-slider/          QML the overlays are made from
     /usr/lib/systemd/user/plasma-login-kwin_wayland.service.d/50-plasma-login-blur-slider.conf
                                                   runs the compositor check before the login

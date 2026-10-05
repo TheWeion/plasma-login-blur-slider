@@ -5,8 +5,8 @@
     "plasma-login-blur-slider sync". Do not edit.
 
     The configuration page below is the unmodified stock one (stock/qmldir
-    points at its real config.qml). This wrapper only adds the
-    LoginBlurIntensity setting and, in the Login Screen settings, its slider.
+    points at its real config.qml). This wrapper only adds the login blur
+    settings and, in the Login Screen settings, their controls.
 */
 
 import QtQuick
@@ -18,6 +18,8 @@ Stock.StockConfig {
 
     property int cfg_LoginBlurIntensity: 100
     property int cfg_LoginBlurIntensityDefault: 100
+    property string cfg_LoginBlurStyle: "standard"
+    property string cfg_LoginBlurStyleDefault: "standard"
     // Diagnostics switch ("plasma-login-blur-slider debug on"); no UI.
     property bool cfg_LoginBlurDebug: false
     property bool cfg_LoginBlurDebugDefault: false

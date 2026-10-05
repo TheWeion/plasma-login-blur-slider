@@ -96,6 +96,11 @@ QtObject {
                 "faderFactor=" + (fader ? num(fader.factor) : "n/a"),
                 "blurRadius=" + (blur ? num(blur.radius) : "n/a"),
                 "intensitySetting=" + Math.round(hook.intensity * 100) + "%",
+                "style=" + hook.style,
+                "frost=" + (hook.frostItem
+                    ? "sigma " + num(hook.frostItem.sigma) + " (1/" + hook.frostItem.reduction + " size, kernel radius "
+                        + hook.frostItem.kernelRadius + ") shown " + num(hook.frostItem.amount)
+                    : "none"),
                 "graphicsApi=" + wallpaperItem.GraphicsInfo.api);
         } catch (e) {
             console.warn(tag, "could not read the state:", e);

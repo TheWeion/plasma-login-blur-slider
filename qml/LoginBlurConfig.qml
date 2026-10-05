@@ -9,18 +9,20 @@ import QtQuick
  * Owned by a wallpaper plugin's configuration page (see wrappers/config.qml).
  *
  * When that page is shown inside Plasma Login Manager's "Login Screen"
- * settings module, this adds a "Blur intensity" row (LoginBlurRow.qml) to the
- * module's own form, right below "Wallpaper type". The value lives in the
- * page's cfg_LoginBlurIntensity property, so the module loads, saves and
- * resets it like any other wallpaper setting.
+ * settings module, this adds a "Blur intensity" row (LoginBlurRow.qml) and a
+ * "Blur style" row (LoginBlurStyleRow.qml) to the module's own form, right
+ * below "Wallpaper type". The values live in the page's
+ * cfg_LoginBlurIntensity and cfg_LoginBlurStyle properties, so the module
+ * loads, saves and resets them like any other wallpaper setting.
  *
  * In every other host (desktop wallpaper dialog, Screen Locking settings) it
- * does nothing, and does not even load the row's QML.
+ * does nothing, and does not even load the rows' QML.
  */
 QtObject {
     id: controller
 
-    // The configuration page's root item; owns cfg_LoginBlurIntensity.
+    // The configuration page's root item; owns cfg_LoginBlurIntensity and
+    // cfg_LoginBlurStyle.
     property Item configRoot: null
     // The hosting dialog/module ("configDialog" in wallpaper config pages).
     property var dialog: null
@@ -28,6 +30,7 @@ QtObject {
     property Item formLayout: null
 
     readonly property string rowObjectName: "plasmaLoginBlurSliderRow"
+    readonly property string styleRowObjectName: "plasmaLoginBlurStyleRow"
 
     // Plasma Login Manager's settings module is recognised by API that only
     // it has (other hosts of wallpaper config pages lack all of these).
@@ -58,7 +61,20 @@ QtObject {
     }
 
     property Item row: null
+    property Item styleRow: null
     property bool attaching: false
+
+    function createRow(file, layout, name, root) {
+        const component = Qt.createComponent(file);
+        if (component.status !== Component.Ready) {
+            console.warn("plasma-login-blur-slider: cannot create " + file + ":", component.errorString());
+            return null;
+        }
+        return component.createObject(layout, {
+            objectName: name,
+            configRoot: root
+        });
+    }
 
     function attach() {
         // Reading these properties can evaluate their bindings for the first
@@ -69,57 +85,74 @@ QtObject {
         const watching = canWatchReloads;
         const layout = formLayout;
         const root = configRoot;
-        if (row || attaching || !inSettings || !layout || !root) {
+        if (row || styleRow || attaching || !inSettings || !layout || !root) {
             return;
         }
         attaching = true;
 
         // When the wallpaper type is switched, the outgoing page is destroyed
-        // only after the incoming one exists. Hide its row straight away, and
-        // remember what it was set to.
-        let carried = -1;
+        // only after the incoming one exists. Hide its rows straight away,
+        // and remember what they were set to.
+        let carriedPercent = -1;
+        let carriedStyle = "";
         const siblings = layout.children;
         for (let i = 0; i < siblings.length; ++i) {
             const sibling = siblings[i];
-            if (sibling.objectName !== rowObjectName) {
-                continue;
+            if (sibling.objectName === rowObjectName) {
+                if (sibling.visible) {
+                    carriedPercent = sibling.pendingPercent >= 0 ? sibling.pendingPercent : sibling.percent;
+                }
+                sibling.visible = false;
+            } else if (sibling.objectName === styleRowObjectName) {
+                if (sibling.visible) {
+                    carriedStyle = sibling.pendingStyle !== "" ? sibling.pendingStyle : sibling.style;
+                }
+                sibling.visible = false;
             }
-            if (sibling.visible) {
-                carried = sibling.pendingPercent >= 0 ? sibling.pendingPercent : sibling.percent;
-            }
-            sibling.visible = false;
         }
 
-        const component = Qt.createComponent("LoginBlurRow.qml");
-        if (component.status === Component.Ready) {
-            row = component.createObject(layout, {
-                objectName: rowObjectName,
-                configRoot: root
-            });
-        } else {
-            console.warn("plasma-login-blur-slider: cannot create the slider:", component.errorString());
-        }
+        row = createRow("LoginBlurRow.qml", layout, rowObjectName, root);
+        styleRow = createRow("LoginBlurStyleRow.qml", layout, styleRowObjectName, root);
         attaching = false;
 
-        // The intensity is stored with the wallpaper type's settings. When
-        // the user picks another type, keep what the slider was set to
-        // instead of jumping to that type's stored value. This has to wait
+        // Both settings are stored with the wallpaper type's settings. When
+        // the user picks another type, keep what the controls were set to
+        // instead of jumping to that type's stored values. This has to wait
         // until the module has connected to our change signals, and must not
         // happen when the page was swapped by "Reset" or "Defaults".
-        if (row && watching && carried >= 0 && carried !== root.cfg_LoginBlurIntensity) {
-            const target = row;
-            target.pendingPercent = carried;
-            Qt.callLater(() => {
-                if (!target || target.pendingPercent < 0) {
-                    return;
-                }
-                const value = target.pendingPercent;
-                target.pendingPercent = -1;
-                if (target.visible && !controller.reloaded && controller.configRoot) {
+        if (!watching) {
+            return;
+        }
+        const sliderTarget = row;
+        const styleTarget = styleRow;
+        let pending = false;
+        if (sliderTarget && carriedPercent >= 0 && carriedPercent !== root.cfg_LoginBlurIntensity) {
+            sliderTarget.pendingPercent = carriedPercent;
+            pending = true;
+        }
+        if (styleTarget && carriedStyle !== "" && carriedStyle !== styleTarget.style) {
+            styleTarget.pendingStyle = carriedStyle;
+            pending = true;
+        }
+        if (!pending) {
+            return;
+        }
+        Qt.callLater(() => {
+            if (sliderTarget && sliderTarget.pendingPercent >= 0) {
+                const value = sliderTarget.pendingPercent;
+                sliderTarget.pendingPercent = -1;
+                if (sliderTarget.visible && !controller.reloaded && controller.configRoot) {
                     controller.configRoot.cfg_LoginBlurIntensity = value;
                 }
-            });
-        }
+            }
+            if (styleTarget && styleTarget.pendingStyle !== "") {
+                const value = styleTarget.pendingStyle;
+                styleTarget.pendingStyle = "";
+                if (styleTarget.visible && !controller.reloaded && controller.configRoot) {
+                    controller.configRoot.cfg_LoginBlurStyle = value;
+                }
+            }
+        });
     }
 
     onInLoginScreenSettingsChanged: attach()
@@ -131,6 +164,10 @@ QtObject {
         if (row) {
             row.visible = false;
             row.destroy();
+        }
+        if (styleRow) {
+            styleRow.visible = false;
+            styleRow.destroy();
         }
     }
 }

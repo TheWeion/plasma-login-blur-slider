@@ -17,9 +17,11 @@
 # /usr/local/share/plasma/wallpapers/<id>. The overlay contains no copy of the
 # stock QML: its main.qml and config.qml *inherit* from the stock files
 # (through stock/qmldir) and only add
-#   * a LoginBlurIntensity setting (merged into a copy of the plugin's schema),
-#   * a slider for it that shows up in the Login Screen settings only, and
-#   * a hook that scales the login screen's blur by that setting.
+#   * the settings LoginBlurIntensity and LoginBlurStyle (merged into a copy
+#     of the plugin's schema),
+#   * controls for them that show up in the Login Screen settings only, and
+#   * a hook that scales the login screen's blur by the intensity and, for
+#     the "frosted" style, lays a Gaussian blur over it.
 # Deleting the overlay ("remove") brings the stock plugin back untouched.
 
 set -euo pipefail
@@ -29,6 +31,7 @@ readonly PROG=plasma-login-blur-slider
 readonly VERSION=@VERSION@
 readonly MARKER=.plasma-login-blur-slider
 readonly KEY=LoginBlurIntensity
+readonly STYLE_KEY=LoginBlurStyle
 
 DATADIR=${PLASMA_LOGIN_BLUR_SLIDER_DATADIR:-@DATADIR@}
 CONFFILE=${PLASMA_LOGIN_BLUR_SLIDER_CONF:-/etc/plasma-login-blur-slider.conf}
@@ -73,11 +76,18 @@ Commands:
   sync            Create or refresh the wallpaper overlays (run as root).
                   Safe to run at any time; run it after Plasma updates.
   remove          Delete all overlays, restoring the stock plugins (as root).
-  status          Show what is installed and the current blur intensity.
+  status          Show what is installed and the current blur settings.
   get             Print the blur intensity (0-100) of the login wallpaper.
   set <0-100>     Set the blur intensity of the login wallpaper (as root).
                   Same as moving the slider in System Settings > Login Screen
                   > Configure Appearance.
+  style           Print the blur style of the login wallpaper.
+  style standard|frosted
+                  Set it (as root). "standard" is the login screen's own
+                  blur; "frosted" is a smooth frosted-glass blur like a
+                  compositor's, much stronger at the same intensity (about
+                  25% frosted is as strong as 100% standard). Same as "Blur
+                  style" in the Login Screen settings.
   login-compositor
                   Switch off third-party blur effects for the login screen's
                   compositor (see LOGIN_COMPOSITOR_BLUR). "sync" does this,
@@ -179,6 +189,10 @@ write_schema() {
       <default>100</default>
       <min>0</min>
       <max>100</max>
+    </entry>
+    <entry name="$STYLE_KEY" type="String">
+      <label>Kind of blur on the Plasma login screen: "standard" (the login screen's own) or "frosted" (frosted glass) (added by $PROG)</label>
+      <default>standard</default>
     </entry>
     <entry name="LoginBlurDebug" type="Bool">
       <label>Write diagnostics about the login wallpaper to the journal and /tmp (added by $PROG)</label>
@@ -634,6 +648,53 @@ cmd_set() {
     fi
 }
 
+style_get() {
+    local value
+    value=$(login_config_read standard --group Greeter --group Wallpaper \
+        --group "$(login_plugin)" --group General --key "$STYLE_KEY")
+    # Anything but "frosted" is treated as the standard blur, here as on the
+    # login screen.
+    [ "$value" = frosted ] || value=standard
+    printf '%s\n' "$value"
+}
+
+cmd_style() {
+    local value=${1:-}
+    command -v kreadconfig6 >/dev/null || die "kreadconfig6 not found"
+    if [ -z "$value" ]; then
+        style_get
+        return 0
+    fi
+    case "$value" in
+        standard|frosted) ;;
+        *) die "style: expected \"standard\" or \"frosted\"" ;;
+    esac
+    need_root
+    command -v kwriteconfig6 >/dev/null || die "kwriteconfig6 not found"
+
+    local plugin
+    plugin=$(login_plugin)
+    if [ "$value" = standard ]; then
+        # The default: leave no entry behind, like the settings page does.
+        kwriteconfig6 --file "$LOGIN_CONFIG" --group Greeter --group Wallpaper \
+            --group "$plugin" --group General --key "$STYLE_KEY" --delete
+    else
+        kwriteconfig6 --file "$LOGIN_CONFIG" --group Greeter --group Wallpaper \
+            --group "$plugin" --group General --key "$STYLE_KEY" "$value"
+    fi
+    chmod 644 -- "$LOGIN_CONFIG"
+    if [ "$value" = frosted ]; then
+        msg "Blur style for the login wallpaper ($plugin) set to frosted glass."
+        msg "At the same intensity it is much stronger than the standard blur:"
+        msg "25% is about what 100% standard looks like. Intensity now: $(cmd_get)%."
+    else
+        msg "Blur style for the login wallpaper ($plugin) set to standard."
+    fi
+    if ! is_ours "$OVERLAY_ROOT/$plugin"; then
+        warn "there is no overlay for $plugin, so this setting has no effect yet (run \"$PROG sync\")"
+    fi
+}
+
 cmd_debug() {
     local mode=${1:-}
     case "$mode" in
@@ -855,6 +916,11 @@ cmd_status() {
     if command -v kreadconfig6 >/dev/null; then
         msg "Login wallpaper type: $(login_plugin)"
         msg "Blur intensity:       $(cmd_get)%"
+        if [ "$(style_get)" = frosted ]; then
+            msg "Blur style:           frosted glass"
+        else
+            msg "Blur style:           standard"
+        fi
     fi
     compositor_status
 
@@ -907,6 +973,7 @@ main() {
         status) cmd_status ;;
         get) cmd_get ;;
         set) cmd_set "${args[0]:-}" ;;
+        style) cmd_style "${args[0]:-}" ;;
         login-compositor) cmd_login_compositor ;;
         debug) cmd_debug "${args[0]:-}" ;;
         report) cmd_report ;;

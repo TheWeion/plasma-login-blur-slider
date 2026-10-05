@@ -5,8 +5,8 @@
     "plasma-login-blur-slider sync". Do not edit.
 
     The stock wallpaper plugin has no configuration page of its own, so this
-    one only carries the LoginBlurIntensity setting and, in the Login Screen
-    settings, its slider.
+    one only carries the login blur settings and, in the Login Screen
+    settings, their controls.
 */
 
 import QtQuick
@@ -20,6 +20,8 @@ Item {
 
     property int cfg_LoginBlurIntensity: 100
     property int cfg_LoginBlurIntensityDefault: 100
+    property string cfg_LoginBlurStyle: "standard"
+    property string cfg_LoginBlurStyleDefault: "standard"
     // Diagnostics switch ("plasma-login-blur-slider debug on"); no UI.
     property bool cfg_LoginBlurDebug: false
     property bool cfg_LoginBlurDebugDefault: false
