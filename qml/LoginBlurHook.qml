@@ -9,18 +9,21 @@ import QtQuick
  * Owned by a wallpaper plugin's root item (see wrappers/main.qml).
  *
  * When that wallpaper is being shown by Plasma Login Manager's wallpaper
- * helper (plasma-login-wallpaper), the helper covers it with a blur effect
- * whose radius is hardcoded. This item looks that effect up in the scene and
- * re-binds its radius so that it is scaled by the wallpaper's
- * "LoginBlurIntensity" setting.
+ * helper (plasma-login-wallpaper) or by the lock screen
+ * (kscreenlocker_greet), the screen covers it with a blur effect whose radius
+ * is hardcoded. This item looks that effect up in the scene and re-binds its
+ * radius so that it is scaled by the wallpaper's "LoginBlurIntensity"
+ * setting. Each screen has its own wallpaper settings, and so its own value:
+ * the login screen's are in /etc/plasmalogin.conf, the lock screen's in the
+ * user's kscreenlockerrc.
  *
  * With "LoginBlurStyle" set to "frosted" it also places a Gaussian blur of
  * the wallpaper (LoginBlurFrost.qml) over the stock effect, which then only
  * carries the transition.
  *
- * In every other process (desktop, lock screen, wallpaper previews) it does
- * nothing at all. If the helper's scene ever stops looking the way we expect,
- * nothing is touched and the stock blur stays in place.
+ * In every other process (desktop, wallpaper previews) it does nothing at
+ * all. If a screen's scene ever stops looking the way we expect, nothing is
+ * touched and the stock blur stays in place.
  */
 QtObject {
     id: hook
@@ -33,10 +36,16 @@ QtObject {
     // the stock wallpaper's own contents.
     property Item wallpaperItem: null
 
-    // Only ever act inside Plasma Login Manager's wallpaper helper.
+    // Only ever act inside Plasma Login Manager's wallpaper helper and the
+    // lock screen. Both build the same scene around the wallpaper: an item
+    // with a 0…1 "factor", holding a FastBlur of the wallpaper and a colour
+    // adjustment of that.
     readonly property bool inLoginHelper: Qt.application.name === "plasma-login-wallpaper"
+    readonly property bool inLockScreen: Qt.application.name === "kscreenlocker_greet"
+    readonly property bool active: inLoginHelper || inLockScreen
+    readonly property string screenName: inLockScreen ? "lock screen" : "login"
 
-    // Radius Plasma Login Manager uses for a fully blurred wallpaper.
+    // Radius both screens use for a fully blurred wallpaper.
     readonly property real stockRadius: 50
 
     // 0.0 (no blur) … 1.0 (stock blur)
@@ -49,7 +58,7 @@ QtObject {
         return Math.max(0, Math.min(100, value)) / 100;
     }
 
-    // "standard": the login screen's own blur, scaled by the intensity.
+    // "standard": the screen's own blur, scaled by the intensity.
     // "frosted":  a Gaussian blur like the one a compositor's blur effect
     //             produces, smooth at every strength and much stronger at
     //             the top of the scale.
@@ -122,7 +131,7 @@ QtObject {
     }
 
     function tryHook() {
-        if (blurItem || !inLoginHelper || !wallpaperItem) {
+        if (blurItem || !active || !wallpaperItem) {
             return;
         }
 
@@ -150,13 +159,13 @@ QtObject {
             frostItem = createFrost(blur, fader);
         }
         blur.radius = Qt.binding(() => hook.fullRadius * fader.factor);
-        console.info("plasma-login-blur-slider: login wallpaper blur set to " + Math.round(intensity * 100) + "%"
+        console.info("plasma-login-blur-slider: " + screenName + " wallpaper blur set to " + Math.round(intensity * 100) + "%"
             + (frostItem ? " (frosted glass)" : ""));
     }
 
     // The frosted blur goes into the stock blur item as a child, on top of
-    // that item's own output: what the login screen's colour adjustment then
-    // picks up is the stock blur with the frost faded in over it.
+    // that item's own output: what the screen's colour adjustment then picks
+    // up is the stock blur with the frost faded in over it.
     function createFrost(blur, fader) {
         const component = Qt.createComponent("LoginBlurFrost.qml");
         if (component.status !== Component.Ready) {
@@ -184,12 +193,13 @@ QtObject {
     readonly property Timer retryTimer: Timer {
         interval: 100
         repeat: true
-        running: hook.inLoginHelper && !hook.blurItem && hook.attempts < 100
+        running: hook.active && !hook.blurItem && hook.attempts < 100
         onTriggered: {
             hook.attempts += 1;
             hook.tryHook();
             if (!hook.blurItem && hook.attempts === 100) {
-                console.warn("plasma-login-blur-slider: could not find the login screen's blur effect; leaving it untouched");
+                console.warn("plasma-login-blur-slider: could not find the " + (hook.inLockScreen ? "lock" : "login")
+                    + " screen's blur effect; leaving it untouched");
             }
         }
     }

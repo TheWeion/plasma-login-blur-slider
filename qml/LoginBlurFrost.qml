@@ -11,9 +11,9 @@ import Qt5Compat.GraphicalEffects
  * The "frosted glass" blur: a Gaussian blur of the wallpaper, the kind a
  * compositor's blur effect approximates, at any strength.
  *
- * LoginBlurHook.qml creates this as a child of the login screen's own blur
- * item and fades it in over that with "amount". Being a child of that item,
- * it ends up in the picture the login screen's colour adjustment is applied
+ * LoginBlurHook.qml creates this as a child of the login or lock screen's own
+ * blur item and fades it in over that with "amount". Being a child of that
+ * item, it ends up in the picture the screen's colour adjustment is applied
  * to, exactly like the stock blur.
  *
  * A wide blur is expensive at full resolution and has no fine detail left to
@@ -54,7 +54,7 @@ Item {
     // What is on screen without any blur. For an opaque wallpaper that is
     // simply the wallpaper. Where a wallpaper is transparent, the window's
     // background colour shows through; and where it is translucent, it shows
-    // twice over, because the login screen draws its own (then unblurred)
+    // twice over, because the screen draws its own (then unblurred)
     // copy of the wallpaper on top of the wallpaper itself. Blurring exactly
     // this picture, opaquely, keeps such wallpapers as dense as they are
     // without the blur and leaves nothing sharp showing through.
