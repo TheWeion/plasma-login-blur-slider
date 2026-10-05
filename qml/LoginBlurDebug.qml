@@ -235,7 +235,9 @@ QtObject {
                 dbg.compositor.logOverview();
                 dbg.compositor.logActiveEffects("4 s after start");
             }
-            dbg.screenshot("start");
+            // Named after when it is taken: the login screen may well be
+            // showing its prompt at this point.
+            dbg.screenshot("4s-after-start");
         }
     }
 
