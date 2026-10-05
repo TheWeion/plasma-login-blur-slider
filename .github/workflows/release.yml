@@ -1,0 +1,61 @@
+# Runs for every push to main. semantic-release reads the commit messages
+# since the last release tag and decides:
+#
+#   fix: ...                      a patch release   1.0.0 -> 1.0.1
+#   feat: ...                     a minor release   1.0.0 -> 1.1.0
+#   feat!: ... / BREAKING CHANGE  a major release   1.0.0 -> 2.0.0
+#   docs, test, ci, chore, ...    no release
+#
+# For a release it builds the package and the source tarball with that
+# version, tags the commit vX.Y.Z and publishes a GitHub release with the
+# files and the release notes. Nothing is committed back to main: the version
+# lives in the tag (see scripts/version.sh).
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Release
+    needs: verify
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    permissions:
+      contents: write
+    steps:
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+
+      # All of the history and the tags: that is what the next version is
+      # worked out from.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install the build and release tools
+        run: ./scripts/install-dev-deps.sh build release
+
+      - run: npm ci
+
+      - name: Release, if the commits call for one
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
