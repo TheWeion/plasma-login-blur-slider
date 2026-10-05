@@ -254,10 +254,11 @@ knows what to switch back on.
 
 ## Tested with
 
-Plasma Login Manager 6.7.5 from the Arch Linux packages (Plasma 6.7.5, KDE
-Frameworks 6.30, Qt 6.11), with the Image, Plain Color, Picture of the Day,
-Haenau, Hunyango and Tiled wallpaper types and both blur styles, including
-the desktop and the lock screen, which have to keep behaving as before.
+Plasma Login Manager 6.7.5 and the lock screen of Plasma 6.7.5 from the Arch
+Linux packages (KDE Frameworks 6.30, Qt 6.11), with the Image, Plain Color,
+Picture of the Day, Haenau, Hunyango and Tiled wallpaper types and both blur
+styles, including the desktop, which has to keep behaving as before. The lock
+screen was run in its test mode, also with the Slideshow type.
 
 The wallpaper process and the settings module of Plasma Login Manager 6.6.6,
 of the 6.8 beta and of the development branch (October 2026) were also run
