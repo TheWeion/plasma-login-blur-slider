@@ -8,13 +8,17 @@ version = 1
 [[annotations]]
 path = ["*.md", ".github/*.md"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 plasma-login-blur-slider contributors"
+SPDX-FileCopyrightText = [
+    "2026 Terry Fallows <terry@weion.dev>"
+]
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # JSON has no comments.
 [[annotations]]
 path = [".commitlintrc.json", ".releaserc.json", "package.json", ".claude/**"]
-SPDX-FileCopyrightText = "2026 plasma-login-blur-slider contributors"
+SPDX-FileCopyrightText = [
+    "2026 Terry Fallows <terry@weion.dev>"
+]
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # Written by tools, or read by them exactly as they are: the npm lockfile, the
@@ -22,5 +26,7 @@ SPDX-License-Identifier = "GPL-3.0-or-later"
 [[annotations]]
 path = ["package-lock.json", ".git-archive-version", "VERSION", "tests/integration/fixtures/**"]
 precedence = "override"
-SPDX-FileCopyrightText = "2026 plasma-login-blur-slider contributors"
+SPDX-FileCopyrightText = [
+    "2026 Terry Fallows <terry@weion.dev>"
+]
 SPDX-License-Identifier = "GPL-3.0-or-later"

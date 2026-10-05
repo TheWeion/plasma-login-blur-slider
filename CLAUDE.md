@@ -170,12 +170,12 @@ The project is GPL-3.0-or-later and follows the [REUSE](https://reuse.software)
 specification: every file states its copyright and its licence, and
 `make lint-reuse` fails if one does not.
 
-- A new file that can hold a comment starts with these two lines, in its own
+- A new file should hold a comment starts with these two lines, in its own
   comment syntax and after the shebang if it has one. Copy them from a
-  neighbouring file:
+  neighbouring file and replace the year, name, and email with the current year, your name, and email respectively:
 
   ```
-  # SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+  # SPDX-FileCopyrightText: 2026 Terry Fallows <terry@weion.dev>
   # SPDX-License-Identifier: GPL-3.0-or-later
   ```
 

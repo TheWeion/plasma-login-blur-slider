@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+# SPDX-FileCopyrightText: 2026 Terry Fallows <terry@weion.dev>
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Lints the QML the way it is deployed: the wrappers next to a "plmblur"

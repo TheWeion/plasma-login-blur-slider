@@ -75,7 +75,7 @@ A new file needs one of two things:
 - If it can hold a comment, it starts with these two lines, in its own comment
   syntax and after the shebang if there is one:
 
-      # SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+      # SPDX-FileCopyrightText: 2026 Terry Fallows <terry@weion.dev>
       # SPDX-License-Identifier: GPL-3.0-or-later
 
   Copy them from a neighbouring file, or let the tool write them:

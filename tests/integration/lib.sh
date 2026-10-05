@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+# SPDX-FileCopyrightText: 2026 Terry Fallows <terry@weion.dev>
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Shared by the integration tests. Sourced, not run.

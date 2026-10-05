@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+# SPDX-FileCopyrightText: 2026 Terry Fallows <terry@weion.dev>
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Prints the version of this source tree. Nothing in the repository carries a
