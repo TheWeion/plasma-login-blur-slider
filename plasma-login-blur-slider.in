@@ -20,8 +20,9 @@
 #   * the settings LoginBlurIntensity and LoginBlurStyle (merged into a copy
 #     of the plugin's schema),
 #   * controls for them that show up in the Login Screen settings only, and
-#   * a hook that scales the login screen's blur by the intensity and, for
-#     the "frosted" style, lays a Gaussian blur over it.
+#   * a hook that scales the blur of the login screen and of the lock screen
+#     by the intensity and, for the "frosted" style, lays a Gaussian blur
+#     over it. Each of the two screens has its own settings.
 # Deleting the overlay ("remove") brings the stock plugin back untouched.
 
 set -euo pipefail
@@ -64,6 +65,9 @@ LOGIN_COMPOSITOR_BLUR=off
 LOGIN_COMPOSITOR_EFFECTS=""
 
 QUIET=0
+# --lock: get/set/style act on the lock screen of the current user instead of
+# on the login screen.
+LOCK=0
 
 msg()  { [ "$QUIET" = 1 ] || printf '%s\n' "$*"; }
 warn() { printf '%s: %s\n' "$PROG" "$*" >&2; }
@@ -89,6 +93,10 @@ Commands:
                   compositor's, much stronger at the same intensity (about
                   25% frosted is as strong as 100% standard). Same as "Blur
                   style" in the Login Screen settings.
+  get|set|style ... --lock
+                  The same for your lock screen, which has its own settings
+                  (System Settings > Screen Locking > Configure Appearance).
+                  They are yours alone: run these without sudo.
   login-compositor
                   Switch off third-party blur effects for the login screen's
                   compositor (see LOGIN_COMPOSITOR_BLUR). "sync" does this,
@@ -101,6 +109,8 @@ Commands:
                   folder in your home directory (as root).
 
 Options:
+  --lock          With get, set and style: the lock screen instead of the
+                  login screen.
   -q, --quiet     Only print warnings and errors.
   -h, --help      Show this help.
   -V, --version   Show the version.
@@ -623,8 +633,83 @@ login_plugin() {
     login_config_read org.kde.image --group Greeter --key WallpaperPluginId
 }
 
+# --- the lock screen: per user, in that user's kscreenlockerrc ---
+
+# Whose lock screen: the user running this, or with sudo the user who ran sudo.
+lock_user() {
+    if [ "$(id -u)" = 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+        printf '%s\n' "$SUDO_USER"
+    else
+        id -un
+    fi
+}
+
+# Run a KConfig tool as that user, so that it finds their kscreenlockerrc
+# (and the system defaults behind it) and leaves the file owned by them.
+lock_tool() {
+    local user home
+    user=$(lock_user)
+    if [ "$user" = "$(id -un)" ]; then
+        "$@"
+        return
+    fi
+    home=$(getent passwd "$user" | cut -d: -f6)
+    [ -n "$home" ] || die "user $user has no home directory"
+    runuser -u "$user" -- env -i HOME="$home" USER="$user" LOGNAME="$user" \
+        PATH=/usr/local/bin:/usr/bin:/bin LANG=C.UTF-8 "$@"
+}
+
+# The lock screen's wallpaper type.
+lock_plugin() {
+    local id
+    id=$(lock_tool kreadconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin --default org.kde.image)
+    printf '%s\n' "${id:-org.kde.image}"
+}
+
+# lock_read <default> <key>
+lock_read() {
+    lock_tool kreadconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper \
+        --group "$(lock_plugin)" --group General --key "$2" --default "$1"
+}
+
+# lock_write <key> <value>, or lock_write <key> --delete. Defaults are not
+# written but removed, like the Screen Locking settings do.
+lock_write() {
+    lock_tool kwriteconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper \
+        --group "$(lock_plugin)" --group General --key "$1" "$2"
+}
+
+lock_intensity() {
+    local value
+    value=$(lock_read 100 "$KEY")
+    case "$value" in
+        ''|*[!0-9]*) value=100 ;;
+    esac
+    [ "$value" -le 100 ] || value=100
+    printf '%s\n' "$value"
+}
+
+lock_style() {
+    local value
+    value=$(lock_read standard "$STYLE_KEY")
+    [ "$value" = frosted ] || value=standard
+    printf '%s\n' "$value"
+}
+
+lock_overlay_hint() {
+    local plugin=$1
+    if ! is_ours "$OVERLAY_ROOT/$plugin"; then
+        warn "there is no overlay for $plugin, so this setting has no effect yet: add it to PLUGINS in"
+        warn "$CONFFILE (or set PLUGINS=all) and run \"sudo $PROG sync\""
+    fi
+}
+
 cmd_get() {
     command -v kreadconfig6 >/dev/null || die "kreadconfig6 not found"
+    if [ "$LOCK" = 1 ]; then
+        lock_intensity
+        return 0
+    fi
     login_config_read 100 --group Greeter --group Wallpaper \
         --group "$(login_plugin)" --group General --key "$KEY"
 }
@@ -635,10 +720,23 @@ cmd_set() {
         ''|*[!0-9]*) die "set: expected a number from 0 to 100" ;;
     esac
     [ "$value" -le 100 ] || die "set: expected a number from 0 to 100"
-    need_root
     command -v kwriteconfig6 >/dev/null || die "kwriteconfig6 not found"
 
     local plugin
+    if [ "$LOCK" = 1 ]; then
+        command -v kreadconfig6 >/dev/null || die "kreadconfig6 not found"
+        plugin=$(lock_plugin)
+        if [ "$value" = 100 ]; then
+            lock_write "$KEY" --delete
+        else
+            lock_write "$KEY" "$value"
+        fi
+        msg "Blur intensity for the lock screen wallpaper ($plugin) of $(lock_user) set to $value%."
+        msg "It shows the next time the screen is locked."
+        lock_overlay_hint "$plugin"
+        return 0
+    fi
+    need_root
     plugin=$(login_plugin)
     kwriteconfig6 --file "$LOGIN_CONFIG" --group Greeter --group Wallpaper \
         --group "$plugin" --group General --key "$KEY" "$value"
@@ -663,17 +761,36 @@ cmd_style() {
     local value=${1:-}
     command -v kreadconfig6 >/dev/null || die "kreadconfig6 not found"
     if [ -z "$value" ]; then
-        style_get
+        if [ "$LOCK" = 1 ]; then
+            lock_style
+        else
+            style_get
+        fi
         return 0
     fi
     case "$value" in
         standard|frosted) ;;
         *) die "style: expected \"standard\" or \"frosted\"" ;;
     esac
-    need_root
     command -v kwriteconfig6 >/dev/null || die "kwriteconfig6 not found"
 
     local plugin
+    if [ "$LOCK" = 1 ]; then
+        plugin=$(lock_plugin)
+        if [ "$value" = standard ]; then
+            lock_write "$STYLE_KEY" --delete
+            msg "Blur style for the lock screen wallpaper ($plugin) of $(lock_user) set to standard."
+        else
+            lock_write "$STYLE_KEY" "$value"
+            msg "Blur style for the lock screen wallpaper ($plugin) of $(lock_user) set to frosted glass."
+            msg "At the same intensity it is much stronger than the standard blur:"
+            msg "25% is about what 100% standard looks like. Intensity now: $(lock_intensity)%."
+        fi
+        msg "It shows the next time the screen is locked."
+        lock_overlay_hint "$plugin"
+        return 0
+    fi
+    need_root
     plugin=$(login_plugin)
     if [ "$value" = standard ]; then
         # The default: leave no entry behind, like the settings page does.
@@ -816,6 +933,13 @@ cmd_report() {
             show_file "$f" 60
         done
 
+        local luser lhome
+        luser=$(lock_user)
+        lhome=$(getent passwd "$luser" | cut -d: -f6)
+        printf '\n===== Lock screen settings of %s =====\n' "$luser"
+        show_file "$lhome/.config/kscreenlockerrc" 60
+        show_file /etc/xdg/kscreenlockerrc 40
+
         printf '\n===== Login wallpaper picture =====\n'
         local image
         image=$(login_config_read "" --group Greeter --group Wallpaper --group "$(login_plugin)" --group General --key Image)
@@ -916,11 +1040,23 @@ cmd_status() {
 
     if command -v kreadconfig6 >/dev/null; then
         msg "Login wallpaper type: $(login_plugin)"
-        msg "Blur intensity:       $(cmd_get)%"
+        msg "Blur intensity:       $(LOCK=0 cmd_get)%"
         if [ "$(style_get)" = frosted ]; then
             msg "Blur style:           frosted glass"
         else
             msg "Blur style:           standard"
+        fi
+        # The lock screen is per user; as plain root there is no user to show.
+        local luser
+        luser=$(lock_user)
+        if [ "$luser" != root ]; then
+            local lplugin lstyle=standard
+            lplugin=$(lock_plugin)
+            [ "$(lock_style)" = frosted ] && lstyle="frosted glass"
+            msg "Lock screen ($luser): $lplugin, blur intensity $(lock_intensity)%, style $lstyle"
+            if ! is_ours "$OVERLAY_ROOT/$lplugin"; then
+                msg "                      (no overlay for $lplugin: its blur is not affected)"
+            fi
         fi
     fi
     compositor_status
@@ -952,6 +1088,7 @@ main() {
     while [ $# -gt 0 ]; do
         case "$1" in
             -q|--quiet) QUIET=1 ;;
+            --lock) LOCK=1 ;;
             -h|--help) usage; exit 0 ;;
             -V|--version) printf '%s %s\n' "$PROG" "$VERSION"; exit 0 ;;
             -*) die "unknown option: $1 (see --help)" ;;
