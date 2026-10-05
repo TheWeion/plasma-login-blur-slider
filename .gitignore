@@ -8,6 +8,9 @@
 *.pkg.tar.*
 /plasma-login-blur-slider-*.tar.gz
 
+# IDEs and editors
+/.idea/
+
 # written into release tarballs and release builds only (scripts/version.sh)
 /VERSION
 
