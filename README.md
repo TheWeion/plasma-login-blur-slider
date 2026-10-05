@@ -5,8 +5,16 @@ Configure Appearance…*, so you can choose how strongly Plasma Login Manager
 blurs the wallpaper behind the login prompt: from 0 % (no blur) to 100 %
 (the stock look).
 
+The blur is applied while the password prompt is showing and fades out when
+only the clock is left, as Plasma Login Manager designed it; the slider sets
+how strong it is.
+
 Plasma Login Manager itself is not patched, replaced or rebuilt, and nothing
 is compiled, so the package keeps working across Plasma updates.
+
+If a third-party compositor effect such as Better Blur DX is blurring the
+whole login screen, the package also switches that off, for the login screen
+only (see "Compositor blur effects" below).
 
 ## Install
 
@@ -49,11 +57,43 @@ quick way to confirm the setting was picked up:
 
     journalctl -b | grep plasma-login-blur-slider
 
+## Compositor blur effects (Better Blur DX and the like)
+
+The login screen runs its own compositor (KWin) with its own settings, kept
+in the home directory of the `plasmalogin` user. When desktop settings have
+been copied there at some point, a "blur every window" effect such as Better
+Blur DX can be enabled for the login screen as well. It then blurs the whole
+login wallpaper, all the time, and neither the login screen nor this slider
+has any say over it.
+
+So that the slider is the only thing that decides, the package switches such
+effects off for the login screen. Your desktop keeps them. This happens
+
+* when the package is installed or updated and whenever `sync` runs, and
+* each time the login screen starts, just before its compositor does, so a
+  settings file that is copied over again later is put right as well.
+
+What counts: every compositor effect with "blur" in its id (`better_blur_dx`,
+`forceblur`, …) except KWin's own `blur`, which only blurs where a window
+asks for it and does not affect the wallpaper. `plasma-login-blur-slider
+status`, run as root, shows what was switched off, and uninstalling the
+package (or `remove`) switches exactly those back on.
+
+To leave the login screen's compositor alone, put this into
+`/etc/plasma-login-blur-slider.conf`:
+
+    LOGIN_COMPOSITOR_BLUR=keep
+
+To have further effects switched off for the login screen, list their ids:
+
+    LOGIN_COMPOSITOR_EFFECTS="diminactive"
+
 ## Remove
 
     sudo pacman -R plasma-login-blur-slider
 
-(or `sudo make uninstall`). This restores the stock behaviour completely. A
+(or `sudo make uninstall`). This restores the stock behaviour completely,
+including compositor effects the package had switched off. A
 leftover `LoginBlurIntensity=` line in `/etc/plasmalogin.conf` is ignored by
 Plasma and disappears the next time you press *Apply* in the Login Screen
 settings.
@@ -104,16 +144,26 @@ stock files and add three things:
 The desktop and the lock screen find the same overlay plugins, but for them
 they behave exactly like the stock plugins.
 
-Everything the package creates outside its own files is in
+What the package creates outside its own files is in
 `/usr/local/share/plasma/wallpapers/`, one directory per wallpaper type, each
 marked with a `.plasma-login-blur-slider` file. Directories there that it did
 not create are never touched.
+
+The one other thing it changes is the login user's `kwinrc`, and only if a
+compositor blur effect is enabled there: it sets that effect's
+`<id>Enabled` entry to `false` and notes the id in a
+`[plasma-login-blur-slider]` group in the same file, which is how `remove`
+knows what to switch back on.
 
 ## Good to know
 
 * **Only the blur changes.** The login screen also adjusts the wallpaper's
   colours a little so the text stays readable; that stays as it is, even at
   0 %.
+* **The blur follows the prompt.** With only the clock on screen the
+  wallpaper is not blurred at any setting. The login screen usually starts
+  with the prompt showing, for about ten seconds if nothing is touched, so it
+  usually starts out blurred.
 * The value is stored with the settings of the chosen wallpaper type. When
   you switch the type in the Login Screen settings, the slider keeps its
   position.
@@ -147,10 +197,16 @@ The wallpaper process and the settings module of Plasma Login Manager 6.6.6,
 of the 6.8 beta and of the development branch (October 2026) were also run
 against it, built from source on the same system.
 
+The compositor part was tested with systemd 262 and a settings file taken
+from a Garuda system that had Better Blur DX enabled for its login screen.
+
 ## Files
 
     /usr/bin/plasma-login-blur-slider             the sync/remove/get/set/debug/report tool
     /usr/share/plasma-login-blur-slider/          QML the overlays are made from
+    /usr/lib/systemd/user/plasma-login-kwin_wayland.service.d/50-plasma-login-blur-slider.conf
+                                                  runs the compositor check before the login
+                                                  screen's compositor starts
     /usr/share/libalpm/hooks/plasma-login-blur-slider.hook    (Arch-based)
     /usr/lib/systemd/system/plasma-login-blur-slider.service  (other distros)
     /etc/plasma-login-blur-slider.conf            optional overrides

@@ -1,0 +1,15 @@
+# Installed by plasma-login-blur-slider.
+#
+# Third-party "blur every window" compositor effects (Better Blur and its
+# forks) blur the whole wallpaper behind the login screen, all the time, and
+# the login screen's blur intensity has no say over them. Each time the login
+# screen's compositor is about to start, make sure such effects are switched
+# off for the login screen. Your desktop is not affected.
+#
+# To leave the login screen's compositor alone, put LOGIN_COMPOSITOR_BLUR=keep
+# into /etc/plasma-login-blur-slider.conf.
+#
+# The leading "-" and the time limit make sure that this step can never keep
+# the login screen from starting, whatever happens to it.
+[Service]
+ExecStartPre=-/usr/bin/timeout 10 @BINDIR@/plasma-login-blur-slider login-compositor --quiet

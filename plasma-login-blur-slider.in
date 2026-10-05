@@ -46,6 +46,18 @@ STOCK_ROOT=/usr/share/plasma/wallpapers
 OVERLAY_ROOT=/usr/local/share/plasma/wallpapers
 # Plasma Login Manager's configuration file (used by "get" and "set").
 LOGIN_CONFIG=/etc/plasmalogin.conf
+# The user the login screen runs as.
+LOGIN_USER=plasmalogin
+# The login screen has its own compositor (KWin) with its own settings.
+# Third-party "blur every window" effects such as Better Blur DX, when enabled
+# there, blur the whole login wallpaper permanently, whatever the blur
+# intensity is set to. "off" switches such effects off for the login screen
+# (never for your desktop); "keep" leaves the login screen's compositor alone.
+LOGIN_COMPOSITOR_BLUR=off
+# More compositor effects to switch off for the login screen, by id, separated
+# by spaces. Every effect with "blur" in its id is covered already, except
+# KWin's own "blur", which only blurs where a window asks for it.
+LOGIN_COMPOSITOR_EFFECTS=""
 
 QUIET=0
 
@@ -66,6 +78,11 @@ Commands:
   set <0-100>     Set the blur intensity of the login wallpaper (as root).
                   Same as moving the slider in System Settings > Login Screen
                   > Configure Appearance.
+  login-compositor
+                  Switch off third-party blur effects for the login screen's
+                  compositor (see LOGIN_COMPOSITOR_BLUR). "sync" does this,
+                  and so does every start of the login screen; there is
+                  normally no need to run it by hand.
   debug on|off    Switch diagnostics on or off (as root). While on, the login
                   wallpaper process logs what it is doing and saves
                   screenshots of its own output to /tmp at every start.
@@ -78,7 +95,8 @@ Options:
   -V, --version   Show the version.
 
 Settings can be overridden in $CONFFILE
-(PLUGINS, STOCK_ROOT, OVERLAY_ROOT, LOGIN_CONFIG).
+(PLUGINS, STOCK_ROOT, OVERLAY_ROOT, LOGIN_CONFIG, LOGIN_USER,
+LOGIN_COMPOSITOR_BLUR, LOGIN_COMPOSITOR_EFFECTS).
 EOF
 }
 
@@ -89,6 +107,10 @@ load_conf() {
     fi
     STOCK_ROOT=${STOCK_ROOT%/}
     OVERLAY_ROOT=${OVERLAY_ROOT%/}
+    case "$LOGIN_COMPOSITOR_BLUR" in
+        off|keep) ;;
+        *) die "LOGIN_COMPOSITOR_BLUR must be \"off\" or \"keep\" (check $CONFFILE)" ;;
+    esac
 
     local dir
     for dir in "$STOCK_ROOT" "$OVERLAY_ROOT"; do
@@ -105,6 +127,15 @@ need_root() {
 
 is_ours() {
     [ -f "$1/$MARKER" ]
+}
+
+# Is at least one of our overlays in place?
+any_overlay() {
+    local d
+    for d in "$OVERLAY_ROOT"/*/; do
+        is_ours "${d%/}" && return 0
+    done
+    return 1
 }
 
 # The plugin ids to overlay, one per line.
@@ -291,6 +322,189 @@ build_overlay() {
     msg "  $id: overlay ready"
 }
 
+# --- the login screen's compositor -------------------------------------------
+#
+# The login screen runs its own KWin, as its own user, with that user's
+# kwinrc. A third-party "blur every window" effect (Better Blur and its forks)
+# that is enabled there blurs everything behind the login screen's window,
+# that is the whole wallpaper, all the time, and nothing in the login screen's
+# own settings has a say over it. Such effects typically end up enabled there
+# because desktop settings were copied to the login user at some point.
+#
+# compositor_fix switches them off in the login user's kwinrc, and nowhere
+# else, and notes there what it switched off; compositor_restore undoes
+# exactly that.
+
+login_home() {
+    getent passwd "$LOGIN_USER" 2>/dev/null | cut -d: -f6
+}
+
+# Run a command as the login screen's user, so that its files stay its own.
+# With a time limit: this runs during package updates and before the login
+# screen starts, where nothing may ever get stuck.
+as_login_user() {
+    if [ "$(id -un)" = "$LOGIN_USER" ]; then
+        timeout 10 "$@"
+    else
+        timeout 10 runuser -u "$LOGIN_USER" -- env -i HOME="$(login_home)" PATH=/usr/local/bin:/usr/bin:/bin "$@"
+    fi
+}
+
+# Print "<effect id> <value>" for each "<id>Enabled" entry in the [Plugins]
+# group of a KWin configuration file.
+plugin_states() {
+    [ -r "$1" ] || return 0
+    awk '
+        /^\[/ { inside = ($0 == "[Plugins]"); next }
+        inside {
+            eq = index($0, "=")
+            if (eq == 0) next
+            key = substr($0, 1, eq - 1)
+            value = tolower(substr($0, eq + 1))
+            gsub(/\[[^]]*\]/, "", key)
+            gsub(/[ \t\r]/, "", value)
+            if (key ~ /Enabled$/) {
+                sub(/Enabled$/, "", key)
+                if (key ~ /^[A-Za-z0-9_.-]+$/) print key, value
+            }
+        }' "$1"
+}
+
+# The effects the login screen's compositor would load ("<id> <value>" lines,
+# the most specific file last so that it wins).
+login_plugin_states() {
+    local home=$1 f
+    for f in /etc/xdg/kwinrc "$home/.config/kdedefaults/kwinrc" "$home/.config/kwinrc"; do
+        plugin_states "$f"
+    done
+}
+
+# Is this an effect that blurs the login wallpaper on its own account?
+is_unwanted_effect() {
+    local id=$1 extra
+    case "${id,,}" in
+        blur) return 1 ;;   # KWin's own effect: only blurs where a window asks for it
+        *blur*) return 0 ;;
+    esac
+    for extra in $LOGIN_COMPOSITOR_EFFECTS; do
+        [ "$id" = "$extra" ] && return 0
+    done
+    return 1
+}
+
+# The unwanted effects that are enabled for the login screen, one per line.
+unwanted_enabled_effects() {
+    local home=$1 id value
+    local -A state=()
+    while read -r id value; do
+        state[$id]=$value
+    done < <(login_plugin_states "$home")
+    for id in "${!state[@]}"; do
+        [ "${state[$id]}" = true ] || continue
+        if is_unwanted_effect "$id"; then
+            printf '%s\n' "$id"
+        fi
+    done | sort
+}
+
+# The effects compositor_fix has switched off, one per line.
+compositor_marker() {
+    [ -r "$1" ] || return 0
+    awk -v group="[$PROG]" '
+        /^\[/ { inside = ($0 == group); next }
+        inside && /^DisabledEffects=/ {
+            sub(/^[^=]*=/, "")
+            n = split($0, ids, ",")
+            for (i = 1; i <= n; i++) if (ids[i] ~ /^[A-Za-z0-9_.-]+$/) print ids[i]
+        }' "$1"
+}
+
+compositor_fix() {
+    [ "$LOGIN_COMPOSITOR_BLUR" = off ] || return 0
+    command -v kwriteconfig6 >/dev/null || return 0
+    # Only while the add-on is in use: "remove" must bring everything back.
+    any_overlay || return 0
+
+    local home
+    home=$(login_home)
+    [ -n "$home" ] || return 0
+
+    local enabled
+    enabled=$(unwanted_enabled_effects "$home")
+    [ -n "$enabled" ] || return 0
+
+    local cfg=$home/.config/kwinrc id switched=()
+    [ -d "$home/.config" ] || as_login_user mkdir -p -- "$home/.config" 2>/dev/null || true
+    for id in $enabled; do
+        if as_login_user kwriteconfig6 --file "$cfg" --group Plugins --key "${id}Enabled" false 2>/dev/null; then
+            switched+=("$id")
+        else
+            warn "could not switch off the compositor effect \"$id\" for the login screen"
+        fi
+    done
+    [ ${#switched[@]} -gt 0 ] || return 0
+
+    # Remember what was switched off so that "remove" can switch it back on.
+    local all
+    all=$({ compositor_marker "$cfg"; printf '%s\n' "${switched[@]}"; } | sort -u | paste -sd, -)
+    as_login_user kwriteconfig6 --file "$cfg" --group "$PROG" --key DisabledEffects "$all" 2>/dev/null || true
+
+    # Worth a line even with --quiet: this changes what the login screen looks like.
+    printf '%s: switched off for the login screen (your desktop is not affected): %s\n' "$PROG" "${switched[*]}"
+}
+
+compositor_restore() {
+    command -v kwriteconfig6 >/dev/null || return 0
+    local home
+    home=$(login_home)
+    [ -n "$home" ] || return 0
+
+    local cfg=$home/.config/kwinrc ids id current restored=()
+    ids=$(compositor_marker "$cfg")
+    [ -n "$ids" ] || return 0
+
+    for id in $ids; do
+        # Only what is still the way we left it.
+        current=$(plugin_states "$cfg" | awk -v id="$id" '$1 == id { value = $2 } END { print value }')
+        if [ "$current" = false ]; then
+            as_login_user kwriteconfig6 --file "$cfg" --group Plugins --key "${id}Enabled" true 2>/dev/null \
+                && restored+=("$id")
+        fi
+    done
+    as_login_user kwriteconfig6 --file "$cfg" --group "$PROG" --key DisabledEffects --delete 2>/dev/null || true
+    [ ${#restored[@]} -eq 0 ] || msg "  login screen compositor: switched back on: ${restored[*]}"
+}
+
+cmd_login_compositor() {
+    [ "$(id -u)" = 0 ] || [ "$(id -un)" = "$LOGIN_USER" ] \
+        || die "this command must be run as root (or as the $LOGIN_USER user)"
+    compositor_fix
+}
+
+compositor_status() {
+    local home
+    home=$(login_home)
+    [ -n "$home" ] && [ -d "$home" ] || return 0
+    if [ ! -x "$home" ] || { [ -e "$home/.config" ] && [ ! -r "$home/.config" ]; }; then
+        msg "Login compositor:     (run this command as root to check)"
+        return 0
+    fi
+
+    local enabled marker
+    enabled=$(unwanted_enabled_effects "$home" | paste -sd' ' -)
+    marker=$(compositor_marker "$home/.config/kwinrc" | paste -sd' ' -)
+    if [ -n "$enabled" ] && [ "$LOGIN_COMPOSITOR_BLUR" = keep ]; then
+        msg "Login compositor:     $enabled enabled and left alone (LOGIN_COMPOSITOR_BLUR=keep);"
+        msg "                      the blur intensity has no say over what it blurs"
+    elif [ -n "$enabled" ]; then
+        warn "the compositor effect \"$enabled\" is enabled for the login screen and blurs its whole wallpaper; run \"$PROG sync\" as root"
+    elif [ -n "$marker" ]; then
+        msg "Login compositor:     switched off for the login screen: $marker"
+    else
+        msg "Login compositor:     no third-party blur effect enabled"
+    fi
+}
+
 cmd_sync() {
     need_root
     [ -f "$DATADIR/wrappers/main.qml" ] || die "data files not found in $DATADIR"
@@ -328,10 +542,13 @@ cmd_sync() {
             msg "  $id: no longer selected, overlay removed"
         fi
     done
+
+    compositor_fix
 }
 
 cmd_remove() {
     need_root
+    compositor_restore
     [ -d "$OVERLAY_ROOT" ] || return 0
 
     local d
@@ -560,6 +777,14 @@ cmd_report() {
             fi
         fi
 
+        printf '\n===== Compositor effects for the login screen =====\n'
+        printf 'LOGIN_COMPOSITOR_BLUR=%s LOGIN_COMPOSITOR_EFFECTS=%s\n' "$LOGIN_COMPOSITOR_BLUR" "$LOGIN_COMPOSITOR_EFFECTS"
+        if [ -n "$login_home" ]; then
+            printf 'enabled and unwanted: %s\n' "$(unwanted_enabled_effects "$login_home" | paste -sd' ' -)"
+            printf 'switched off by this add-on: %s\n' "$(compositor_marker "$login_home/.config/kwinrc" | paste -sd' ' -)"
+        fi
+        ls -la /usr/lib/systemd/user/plasma-login-kwin_wayland.service.d 2>&1
+
         printf '\n===== System-wide KDE defaults =====\n'
         for f in /etc/xdg/kwinrc /etc/xdg/kdeglobals /etc/xdg/plasmarc; do
             show_file "$f" 60
@@ -631,6 +856,7 @@ cmd_status() {
         msg "Login wallpaper type: $(login_plugin)"
         msg "Blur intensity:       $(cmd_get)%"
     fi
+    compositor_status
 
     # Plugins are looked up along XDG_DATA_DIRS; the overlay has to come first.
     local overlay_base=${OVERLAY_ROOT%/plasma/wallpapers}
@@ -681,6 +907,7 @@ main() {
         status) cmd_status ;;
         get) cmd_get ;;
         set) cmd_set "${args[0]:-}" ;;
+        login-compositor) cmd_login_compositor ;;
         debug) cmd_debug "${args[0]:-}" ;;
         report) cmd_report ;;
         '') usage; exit 1 ;;
