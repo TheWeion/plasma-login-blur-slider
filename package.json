@@ -1,0 +1,23 @@
+{
+  "name": "plasma-login-blur-slider",
+  "private": true,
+  "description": "Release and commit-message tooling for plasma-login-blur-slider. The project itself contains no Node.js code.",
+  "//": "conventional-commits-filter is listed only to settle a peer dependency on which commitlint and semantic-release disagree; nothing here uses it directly.",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "commitlint": "commitlint",
+    "release": "semantic-release",
+    "release:dry-run": "semantic-release --dry-run"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
+    "@semantic-release/exec": "^7.1.0",
+    "conventional-changelog-conventionalcommits": "^9.3.0",
+    "conventional-commits-filter": "^6.0.1",
+    "semantic-release": "^25.0.9"
+  },
+  "engines": {
+    "node": "^22.14.0 || >=24.10.0"
+  }
+}

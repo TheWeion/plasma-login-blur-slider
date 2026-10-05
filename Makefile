@@ -18,7 +18,8 @@ USERUNITDIR ?= $(PREFIX)/lib/systemd/user
 HOOKDIR ?= $(PREFIX)/share/libalpm/hooks
 
 .PHONY: all install install-alpm-hook install-systemd-unit uninstall \
-        dist package lint lint-sh lint-qml lint-workflows test test-integration check clean
+        dist package lint lint-sh lint-qml lint-workflows test test-integration check \
+        release-preview clean
 
 all:
 	@echo "Nothing to build. See README.md for how to install, CONTRIBUTING.md for development."
@@ -94,6 +95,11 @@ test-integration:
 	./tests/integration/run.sh $(PACKAGE)
 
 check: lint test
+
+# What the release workflow would do with the commits since the last release
+# (needs "npm ci").
+release-preview:
+	@node scripts/release-preview.mjs
 
 clean:
 	rm -rf dist
