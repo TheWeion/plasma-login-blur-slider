@@ -38,10 +38,11 @@ CONFFILE=${PLASMA_LOGIN_BLUR_SLIDER_CONF:-/etc/plasma-login-blur-slider.conf}
 
 # --- defaults; override any of these in /etc/plasma-login-blur-slider.conf ---
 
-# Wallpaper plugins to overlay (those Plasma Login Manager offers as
-# "Wallpaper type"). Ids that are not installed are skipped. Use "all" to
-# overlay every plugin found in STOCK_ROOT.
-PLUGINS="org.kde.image org.kde.color org.kde.potd org.kde.haenau org.kde.hunyango org.kde.tiled online.knowmad.shaderwallpaper"
+# Wallpaper plugins to overlay: those Plasma Login Manager offers as
+# "Wallpaper type", and Slideshow, which the lock screen offers as well. Ids
+# that are not installed are skipped. Use "all" to overlay every plugin found
+# in STOCK_ROOT (for other wallpaper types you use on the lock screen).
+PLUGINS="org.kde.image org.kde.slideshow org.kde.color org.kde.potd org.kde.haenau org.kde.hunyango org.kde.tiled online.knowmad.shaderwallpaper"
 # Where the distribution installs wallpaper plugins.
 STOCK_ROOT=/usr/share/plasma/wallpapers
 # Where the overlays go. Its "…/share" directory must come before the one of
