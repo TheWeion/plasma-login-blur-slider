@@ -12,7 +12,8 @@
 #            resolves
 #   build    makepkg and friends, namcap
 #   test     bats; and for the integration tests Plasma Login Manager, the
-#            lock screen and a headless compositor with software rendering
+#            lock screen (whose QML is in plasma-desktop's shell package) and a
+#            headless compositor with software rendering
 #   release  Node.js for semantic-release and commitlint
 
 set -eu
@@ -36,7 +37,7 @@ for group in "$@"; do
             packages="$packages base-devel namcap"
             ;;
         test)
-            packages="$packages bats fakeroot kconfig plasma-workspace plasma-login-manager kscreenlocker sway mesa dbus libxml2"
+            packages="$packages bats fakeroot kconfig plasma-workspace plasma-login-manager kscreenlocker plasma-desktop sway mesa dbus libxml2"
             ;;
         release)
             packages="$packages nodejs npm"
