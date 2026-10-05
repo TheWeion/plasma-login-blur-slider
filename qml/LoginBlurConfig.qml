@@ -43,10 +43,12 @@ QtObject {
         && typeof dialog.resetSynchronizedSettings === "function"
         && dialog.sessionModel !== undefined
 
-    // The Screen Locking settings module, by API that only it has.
+    // The Screen Locking settings module, by API that only it has (its
+    // second settings page was the look-and-feel theme's before it became
+    // the shell's).
     readonly property bool inLockScreenSettings: dialog !== null && dialog !== undefined
         && !inLoginScreenSettings
-        && dialog.shellConfigFile !== undefined
+        && (dialog.shellConfigFile !== undefined || dialog.lnfConfigFile !== undefined)
         && dialog.wallpaperIntegration !== undefined
         && dialog.isDefaultsAppearance !== undefined
         && typeof dialog.forceUpdateState === "function"
