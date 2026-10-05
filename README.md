@@ -28,11 +28,12 @@ only (see "Compositor blur effects" below).
 
 ### Garuda, CachyOS, EndeavourOS, Manjaro, Arch
 
-Install the prebuilt package:
+Download `plasma-login-blur-slider-<version>-1-any.pkg.tar.zst` from the
+[latest release](../../releases/latest) and install it:
 
-    sudo pacman -U plasma-login-blur-slider-1.0.0-1-any.pkg.tar.zst
+    sudo pacman -U plasma-login-blur-slider-*-any.pkg.tar.zst
 
-or build it yourself from this directory:
+or build it yourself, in a clone or in an unpacked release tarball:
 
     makepkg -si
 
@@ -282,6 +283,13 @@ from a Garuda system that had Better Blur DX enabled for its login screen.
     /usr/share/libalpm/hooks/plasma-login-blur-slider.hook    (Arch-based)
     /usr/lib/systemd/system/plasma-login-blur-slider.service  (other distros)
     /etc/plasma-login-blur-slider.conf            optional overrides
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: `make check` lints and runs
+the unit tests, `make package` builds the package into `dist/`, every pull
+request is built and tested and has its package attached, and releases are
+made automatically from the commit messages.
 
 ## License
 
