@@ -120,10 +120,10 @@ To have further effects switched off for the login screen, list their ids:
     sudo pacman -R plasma-login-blur-slider
 
 (or `sudo make uninstall`). This restores the stock behaviour completely,
-including compositor effects the package had switched off. A
-leftover `LoginBlurIntensity=` line in `/etc/plasmalogin.conf` is ignored by
-Plasma and disappears the next time you press *Apply* in the Login Screen
-settings.
+including compositor effects the package had switched off. Leftover
+`LoginBlurIntensity=` and `LoginBlurStyle=` lines in `/etc/plasmalogin.conf`
+are ignored by Plasma and disappear the next time you press *Apply* in the
+Login Screen settings.
 
 If wallpapers ever misbehave and you suspect this package, this brings the
 stock wallpaper plugins back immediately, without uninstalling anything:
@@ -175,7 +175,11 @@ the login screen's own blur, inside the picture the login screen then applies
 its colour adjustment to, and fades it in and out with the prompt. The login
 screen's own blur only carries the transition then. The Gaussian blur is
 computed on a reduced copy of the wallpaper and scaled back up, which makes
-even the widest setting cheap, and only when the wallpaper changes.
+even the widest setting cheap, and only when the wallpaper changes. What it
+blurs is the picture as it is on screen without blur, including the window's
+background where a wallpaper is transparent, so nothing sharp is left showing
+through (the standard blur, like the stock one, does leave the edges of
+transparent areas visible).
 
 The desktop and the lock screen find the same overlay plugins, but for them
 they behave exactly like the stock plugins.
@@ -230,12 +234,17 @@ knows what to switch back on.
 
 Plasma Login Manager 6.7.5 from the Arch Linux packages (Plasma 6.7.5, KDE
 Frameworks 6.30, Qt 6.11), with the Image, Plain Color, Picture of the Day,
-Haenau, Hunyango and Tiled wallpaper types, including the desktop and the
-lock screen, which have to keep behaving as before.
+Haenau, Hunyango and Tiled wallpaper types and both blur styles, including
+the desktop and the lock screen, which have to keep behaving as before.
 
 The wallpaper process and the settings module of Plasma Login Manager 6.6.6,
 of the 6.8 beta and of the development branch (October 2026) were also run
 against it, built from source on the same system.
+
+The frosted glass blur was compared with an exact Gaussian blur of the same
+picture at 3840×1600, from 5 % to 100 %, and on a scaled screen. All of this
+was done with software rendering; it has not been measured on real graphics
+hardware.
 
 The compositor part was tested with systemd 262 and a settings file taken
 from a Garuda system that had Better Blur DX enabled for its login screen.
