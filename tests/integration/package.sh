@@ -31,8 +31,12 @@ case "${1:-}" in
         package=${2:?package.sh install <package file>}
         section "installing $(basename "$package")"
         check "pacman installs it" pacman -U --noconfirm "$package"
+        qkk=$(pacman -Qkk "$PROG" 2>&1)
         check_that "every installed file is as packaged" \
-            'pacman -Qkk "$PROG" 2>&1 | grep -q ", 0 altered files"'
+            'grep -q ", 0 altered files" <<< "$qkk"'
+        if ! grep -q ", 0 altered files" <<< "$qkk"; then
+            printf '%s\n' "$qkk" | sed 's/^/  | /'
+        fi
         check_that "the tool reports the package's version" \
             '[ "$PROG $(pacman -Q "$PROG" | sed "s/.* //; s/-[0-9]*$//")" = "$("$PROG" --version)" ]'
         check "the pacman hook is installed" test -f "$HOOK"

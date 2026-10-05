@@ -31,8 +31,7 @@ if [ -f "$CONF" ]; then
     cp -p -- "$CONF" "$backup"
     had_conf=1
 fi
-log=$(mktemp)
-chown "$LOGIN_USER" "$log"
+log=$(user_log "$LOGIN_USER")
 
 cleanup() {
     if [ "$had_conf" = 1 ]; then
@@ -40,7 +39,8 @@ cleanup() {
     else
         rm -f -- "$CONF"
     fi
-    rm -f -- "$backup" "$log"
+    rm -f -- "$backup"
+    rm_user_log "$log"
 }
 trap cleanup EXIT
 

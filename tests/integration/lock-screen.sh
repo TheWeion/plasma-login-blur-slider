@@ -37,11 +37,10 @@ if ! getent passwd "$TEST_USER" >/dev/null; then
     created=1
 fi
 user_home=$(getent passwd "$TEST_USER" | cut -d: -f6)
-log=$(mktemp)
-chown "$TEST_USER" "$log"
+log=$(user_log "$TEST_USER")
 
 cleanup() {
-    rm -f -- "$log"
+    rm_user_log "$log"
     if [ "$created" = 1 ]; then
         userdel --remove "$TEST_USER" >/dev/null 2>&1
     fi

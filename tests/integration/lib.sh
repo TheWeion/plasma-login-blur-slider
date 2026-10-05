@@ -94,6 +94,25 @@ wait_for_line() {
     return 1
 }
 
+# user_log <user>: prints the path of a new, empty file owned by that user,
+# for a session to log into and the test to read and empty again. It is not
+# put directly into /tmp: with fs.protected_regular, which many hosts turn on
+# and containers share with their host, not even root may open another user's
+# file in a sticky directory for writing. Remove it with rm_user_log.
+user_log() {
+    local dir
+    dir=$(mktemp -d)
+    chmod 755 "$dir"
+    : > "$dir/log"
+    chown "$1" "$dir/log"
+    printf '%s\n' "$dir/log"
+}
+
+rm_user_log() {
+    rm -f -- "$1"
+    rmdir -- "$(dirname -- "$1")" 2>/dev/null || true
+}
+
 # in_headless_session <user> <command>...
 # Runs the command as that user inside a D-Bus session with a headless
 # Wayland compositor (see headless-session.sh).
