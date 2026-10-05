@@ -983,7 +983,7 @@ cmd_report() {
 
         printf '\n===== Related packages =====\n'
         if command -v pacman >/dev/null; then
-            pacman -Qq | grep -i -E 'blur|kwin|kvantum|wallpaper|plasma-keyboard|plymouth' 
+            pacman -Qq | grep -i -E 'blur|kwin|kvantum|wallpaper|plasma-keyboard|plymouth'
         fi
 
         printf '\n===== Wallpaper plugins =====\n'
