@@ -35,11 +35,21 @@ trap 'rm -rf -- "$work"' EXIT
 stage=$work/$name-$version
 mkdir -p -- "$stage" "$out"
 
-# The source is what git tracks (as it is in the working tree), or, outside of
-# a clone, everything but build output.
+# The source is the files git tracks, as they are in the working tree; or,
+# outside of a clone, everything but build output. Files git does not track
+# stay out, so that nothing that merely happens to lie around ends up in a
+# release.
 if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
-    git -C "$root" ls-files -z --cached --others --exclude-standard \
-        | (cd -- "$root" && xargs -0 -r cp --parents -t "$stage" --)
+    while IFS= read -r -d '' file; do
+        if [ -e "$root/$file" ]; then
+            (cd -- "$root" && cp --parents -- "$file" "$stage")
+        fi
+    done < <(git -C "$root" ls-files -z --cached)
+    left_out=$(git -C "$root" ls-files --others --exclude-standard)
+    if [ -n "$left_out" ]; then
+        echo "Left out, because git does not track them (\"git add\" them to include them):"
+        printf '%s\n' "$left_out" | head -n 10 | sed 's/^/  /'
+    fi
 else
     (cd -- "$root" && tar -cf - \
         --exclude=./dist --exclude=./node_modules --exclude=./pkg --exclude=./src \
