@@ -21,6 +21,14 @@ SPDX-FileCopyrightText = [
 ]
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
+# Images have no comments.
+[[annotations]]
+path = ["**/*.png", "**/*.jpg", "**/*.gif", "**/*.webp"]
+SPDX-FileCopyrightText = [
+    "2026 Terry Fallows <terry@weion.dev>"
+]
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
 # Written by tools, or read by them exactly as they are: the npm lockfile, the
 # version markers (scripts/version.sh) and the test fixtures.
 [[annotations]]
