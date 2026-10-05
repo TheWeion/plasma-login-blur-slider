@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# "git archive" (and GitHub's source downloads) fill in the release tag here,
+# so that an archive without git metadata still knows its version.
+.git-archive-version export-subst

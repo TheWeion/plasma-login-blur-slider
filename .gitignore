@@ -1,0 +1,12 @@
+# build output
+/dist/
+/pkg/
+/src/
+*.pkg.tar.*
+/plasma-login-blur-slider-*.tar.gz
+
+# written into release tarballs and release builds only (scripts/version.sh)
+/VERSION
+
+# release and commit tooling
+/node_modules/

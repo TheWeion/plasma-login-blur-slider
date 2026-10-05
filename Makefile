@@ -3,7 +3,11 @@
 NAME    := plasma-login-blur-slider
 # The systemd user unit that starts the login screen's compositor.
 KWINUNIT := plasma-login-kwin_wayland.service
-VERSION := 1.0.0
+# Not kept here: releases are git tags, and scripts/version.sh derives the
+# version from them (or from the VERSION file of a release tarball).
+ifeq ($(origin VERSION),undefined)
+VERSION := $(shell ./scripts/version.sh)
+endif
 
 PREFIX  ?= /usr
 BINDIR  ?= $(PREFIX)/bin
@@ -13,10 +17,11 @@ UNITDIR ?= $(PREFIX)/lib/systemd/system
 USERUNITDIR ?= $(PREFIX)/lib/systemd/user
 HOOKDIR ?= $(PREFIX)/share/libalpm/hooks
 
-.PHONY: all install install-alpm-hook install-systemd-unit uninstall dist
+.PHONY: all install install-alpm-hook install-systemd-unit uninstall \
+        dist package lint lint-sh lint-qml lint-workflows test test-integration check clean
 
 all:
-	@echo "Nothing to build. See README.md for how to install."
+	@echo "Nothing to build. See README.md for how to install, CONTRIBUTING.md for development."
 
 # The files every installation needs. Afterwards run "$(NAME) sync" as root.
 install:
@@ -51,8 +56,44 @@ uninstall:
 	rm -f "$(DESTDIR)$(USERUNITDIR)/$(KWINUNIT).d/50-$(NAME).conf"
 	-rmdir "$(DESTDIR)$(USERUNITDIR)/$(KWINUNIT).d" 2>/dev/null
 
+# --- development --------------------------------------------------------------
+
+# The source tarball, in dist/.
 dist:
-	tmp=$$(mktemp -d) && \
-	tar --transform 's|^\.|$(NAME)-$(VERSION)|' --exclude='./*.tar.gz' --exclude='./*.pkg.tar.*' --exclude='./pkg' --exclude='./src' \
-	    --owner=0 --group=0 -czf "$$tmp/$(NAME)-$(VERSION).tar.gz" ./ && \
-	mv "$$tmp/$(NAME)-$(VERSION).tar.gz" . && rmdir "$$tmp"
+	./scripts/dist.sh
+
+# The source tarball and the Arch package, in dist/ (needs makepkg).
+package:
+	./scripts/dist.sh --package
+
+lint: lint-sh lint-qml lint-workflows
+
+# The tool is a template; lint what gets installed.
+lint-sh:
+	@tmp=$$(mktemp) && \
+	sed -e 's|@VERSION@|$(VERSION)|g' -e 's|@DATADIR@|$(DATADIR)|g' $(NAME).in > "$$tmp" && \
+	bash -n "$$tmp" && shellcheck --shell=bash "$$tmp"; status=$$?; rm -f "$$tmp"; exit $$status
+	shellcheck -x scripts/*.sh tests/run-unit.sh tests/integration/*.sh
+	shellcheck --shell=bash tests/unit/helpers.bash
+	@echo "shell: no warnings"
+
+lint-qml:
+	./scripts/lint-qml.sh
+
+lint-workflows:
+	actionlint .github/workflows/*.yml
+	@echo "workflows: no warnings"
+
+# Unit tests: the tool against a throw-away directory tree. Safe anywhere.
+test:
+	./tests/run-unit.sh
+
+# Integration tests: the installed package against the real login screen and
+# lock screen. They change the system they run on: containers and VMs only.
+test-integration:
+	./tests/integration/run.sh $(PACKAGE)
+
+check: lint test
+
+clean:
+	rm -rf dist
