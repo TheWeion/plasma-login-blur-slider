@@ -19,8 +19,8 @@ USERUNITDIR ?= $(PREFIX)/lib/systemd/user
 HOOKDIR ?= $(PREFIX)/share/libalpm/hooks
 
 .PHONY: all install install-alpm-hook install-systemd-unit uninstall \
-        dist package lint lint-sh lint-qml lint-workflows test test-integration check \
-        release-preview clean
+        dist package lint lint-sh lint-qml lint-workflows lint-reuse \
+        test test-integration check release-preview clean
 
 all:
 	@echo "Nothing to build. See README.md for how to install, CONTRIBUTING.md for development."
@@ -68,7 +68,7 @@ dist:
 package:
 	./scripts/dist.sh --package
 
-lint: lint-sh lint-qml lint-workflows
+lint: lint-sh lint-qml lint-workflows lint-reuse
 
 # The tool is a template; lint what gets installed.
 lint-sh:
@@ -85,6 +85,14 @@ lint-qml:
 lint-workflows:
 	actionlint .github/workflows/*.yml
 	@echo "workflows: no warnings"
+
+# Every file states its copyright and its licence (https://reuse.software),
+# and LICENSE, where people and GitHub look, is the same text as the copy in
+# LICENSES/, where the REUSE tool looks.
+lint-reuse:
+	reuse lint --lines
+	cmp LICENSE LICENSES/GPL-3.0-or-later.txt
+	@echo "licensing: every file accounted for"
 
 # Unit tests: the tool against a throw-away directory tree. Safe anywhere.
 test:

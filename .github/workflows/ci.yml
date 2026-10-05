@@ -7,7 +7,8 @@
 #   Commit messages   the commits and the title follow Conventional Commits,
 #                     which is what the release workflow versions from; its
 #                     summary says what merging would release
-#   Lint              shellcheck, qmllint, actionlint
+#   Lint              shellcheck, qmllint, actionlint, and the REUSE check that
+#                     every file states its copyright and licence
 #   Build and test    unit tests, the Arch package, and the package installed
 #                     and exercised against the real login screen and lock
 #                     screen in a headless session
