@@ -26,13 +26,56 @@ our_overlays() {
     find "$OVERLAYS" -mindepth 2 -maxdepth 2 -name ".$PROG" 2>/dev/null | wc -l
 }
 
+# not_extracted <path>: whether pacman.conf's NoExtract keeps the path off
+# the disk. The Arch container image leaves out documentation this way, so
+# /usr/share/doc is missing there on purpose. As in pacman, the last pattern
+# that matches decides, and "!" negates.
+not_extracted() {
+    local path=${1#/} pattern result=1
+    while IFS= read -r pattern; do
+        [ -n "$pattern" ] || continue
+        # The patterns are globs on purpose.
+        # shellcheck disable=SC2053
+        if [[ $pattern == '!'* ]]; then
+            if [[ $path == ${pattern#!} || $path/ == ${pattern#!} ]]; then
+                result=1
+            fi
+        elif [[ $path == $pattern || $path/ == $pattern ]]; then
+            result=0
+        fi
+    done < <(pacman-conf NoExtract 2>/dev/null || true)
+    return "$result"
+}
+
+# Reads pacman -Qkk's output, prints the complaints about files that
+# NoExtract does not account for.
+unexplained_alterations() {
+    local line path
+    while IFS= read -r line; do
+        case "$line" in
+            "warning: $PROG: /"*)
+                path=${line#"warning: $PROG: "}
+                path=${path%% (*}
+                not_extracted "$path" || printf '%s\n' "$line"
+                ;;
+            "error: "*)
+                printf '%s\n' "$line"
+                ;;
+        esac
+    done
+}
+
 case "${1:-}" in
     install)
         package=${2:?package.sh install <package file>}
         section "installing $(basename "$package")"
         check "pacman installs it" pacman -U --noconfirm "$package"
+        qkk=$(pacman -Qkk "$PROG" 2>&1)
         check_that "every installed file is as packaged" \
-            'pacman -Qkk "$PROG" 2>&1 | grep -q ", 0 altered files"'
+            'grep -q "^$PROG: .* total files" <<< "$qkk" && [ -z "$(unexplained_alterations <<< "$qkk")" ]'
+        if [ -n "$(unexplained_alterations <<< "$qkk")" ]; then
+            printf '%s\n' "$qkk" | sed 's/^/  | /'
+        fi
         check_that "the tool reports the package's version" \
             '[ "$PROG $(pacman -Q "$PROG" | sed "s/.* //; s/-[0-9]*$//")" = "$("$PROG" --version)" ]'
         check "the pacman hook is installed" test -f "$HOOK"

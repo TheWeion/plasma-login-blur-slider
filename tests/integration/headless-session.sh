@@ -23,8 +23,18 @@ export QT_FORCE_STDERR_LOGGING=1
 config=$XDG_RUNTIME_DIR/sway-headless.conf
 : > "$config"
 
+# Arch's sway carries a file capability (cap_sys_nice, for realtime
+# scheduling). Where that capability is not available, as in a container, the
+# kernel refuses to start the program at all ("Operation not permitted"). A
+# plain copy has no file capabilities and runs; we do not need realtime here.
+sway=$(command -v sway)
+if [ -n "$(getcap "$sway" 2>/dev/null)" ]; then
+    cp -- "$sway" "$XDG_RUNTIME_DIR/sway"
+    sway=$XDG_RUNTIME_DIR/sway
+fi
+
 WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 \
-    sway -c "$config" > "$XDG_RUNTIME_DIR/sway.log" 2>&1 &
+    "$sway" -c "$config" > "$XDG_RUNTIME_DIR/sway.log" 2>&1 &
 compositor=$!
 
 socket=""
