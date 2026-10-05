@@ -51,12 +51,48 @@ Item {
     opacity: amount
     visible: amount > 0 && sigma > 0 && sourceItem !== null
 
+    // What is on screen without any blur. For an opaque wallpaper that is
+    // simply the wallpaper. Where a wallpaper is transparent, the window's
+    // background colour shows through; and where it is translucent, it shows
+    // twice over, because the login screen draws its own (then unblurred)
+    // copy of the wallpaper on top of the wallpaper itself. Blurring exactly
+    // this picture, opaquely, keeps such wallpapers as dense as they are
+    // without the blur and leaves nothing sharp showing through.
+    Item {
+        id: seen
+
+        width: frost.width
+        height: frost.height
+        visible: false
+
+        Rectangle {
+            anchors.fill: parent
+            color: frost.Window.window ? frost.Window.window.color : "black"
+        }
+
+        ShaderEffectSource {
+            id: wallpaperCopy
+
+            anchors.fill: parent
+            sourceItem: frost.sourceItem
+            live: true
+            smooth: true
+        }
+
+        ShaderEffect {
+            readonly property var source: wallpaperCopy
+
+            anchors.fill: parent
+            visible: frost.sourceItem !== null && frost.sourceItem.visible
+        }
+    }
+
     ShaderEffectSource {
         id: picture
 
         width: frost.width
         height: frost.height
-        sourceItem: frost.sourceItem
+        sourceItem: seen
         live: true
         smooth: true
         mipmap: frost.reduction > 1
@@ -74,15 +110,6 @@ Item {
         deviation: frost.reducedSigma
         transparentBorder: false
         visible: false
-    }
-
-    // Where the wallpaper is transparent, the window's background colour
-    // shows through it on screen. The blur has to be laid over the same
-    // colour to be the blur of what is actually seen; without this, the
-    // sharp wallpaper underneath would show through the blurred copy there.
-    Rectangle {
-        anchors.fill: parent
-        color: frost.Window.window ? frost.Window.window.color : "black"
     }
 
     ShaderEffectSource {
