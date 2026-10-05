@@ -1016,7 +1016,10 @@ cmd_report() {
     chown -R -- "$user": "$dir" 2>/dev/null || true
     msg "Report written to $dir"
     msg "  report.txt        text report"
-    ls -- "$dir" | grep -v '^report.txt$' | sed 's/^/  /'
+    local file
+    for file in "$dir"/*; do
+        [ "${file##*/}" = report.txt ] || msg "  ${file##*/}"
+    done
 }
 
 cmd_status() {
