@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Runs for every pull request, and again before every release (release.yml
 # calls it). A pull request can be approved once all of it is green:
 #

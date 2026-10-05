@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 post_install() {
   plasma-login-blur-slider sync --quiet || true
   echo '"Blur intensity" and "Blur style" are in System Settings > Login Screen and > Screen Locking, under Configure Appearance.'

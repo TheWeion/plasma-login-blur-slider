@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Builds straight from this directory: run "makepkg -si" here.
 #
 # The version is not maintained in this file. pkgver() takes it from the

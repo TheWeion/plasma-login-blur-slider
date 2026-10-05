@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # dist.sh [--package]

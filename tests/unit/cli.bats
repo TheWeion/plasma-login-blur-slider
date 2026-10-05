@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The command line: options, and the commands that read and write the blur

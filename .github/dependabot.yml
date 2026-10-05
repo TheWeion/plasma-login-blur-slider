@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Keeps the workflow actions and the release tooling current. The "chore"
 # prefix means these updates never cause a release by themselves.
 version: 2

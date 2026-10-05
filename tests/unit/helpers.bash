@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Shared setup for the unit tests.

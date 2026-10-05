@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # sync and remove: creating, refreshing and deleting the wallpaper overlays.
