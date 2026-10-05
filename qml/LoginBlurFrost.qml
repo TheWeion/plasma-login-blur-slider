@@ -76,6 +76,15 @@ Item {
         visible: false
     }
 
+    // Where the wallpaper is transparent, the window's background colour
+    // shows through it on screen. The blur has to be laid over the same
+    // colour to be the blur of what is actually seen; without this, the
+    // sharp wallpaper underneath would show through the blurred copy there.
+    Rectangle {
+        anchors.fill: parent
+        color: frost.Window.window ? frost.Window.window.color : "black"
+    }
+
     ShaderEffectSource {
         anchors.fill: parent
         sourceItem: gaussian
