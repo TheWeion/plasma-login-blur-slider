@@ -1,0 +1,162 @@
+# Runs for every pull request, and again before every release (release.yml
+# calls it). A pull request can be approved once all of it is green:
+#
+#   Commit messages   the commits and the title follow Conventional Commits,
+#                     which is what the release workflow versions from; its
+#                     summary says what merging would release
+#   Lint              shellcheck, qmllint, actionlint
+#   Build and test    unit tests, the Arch package, and the package installed
+#                     and exercised against the real login screen and lock
+#                     screen in a headless session
+#
+# The built package is attached to the run as an artifact, so that reviewers
+# can install exactly what was tested.
+
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  commits:
+    name: Commit messages
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Commits follow Conventional Commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: npx commitlint --from "$BASE" --to "$HEAD" --verbose
+
+      # The title becomes the commit message when a pull request is squashed.
+      - name: Title follows Conventional Commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | npx commitlint --verbose
+
+      # Runs the release configuration against these commits, so a broken
+      # configuration shows up here, and reviewers see what merging releases.
+      - name: What merging this would release
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node scripts/release-preview.mjs "$BASE" "$HEAD" > release-preview.md
+          cat release-preview.md
+          cat release-preview.md >> "$GITHUB_STEP_SUMMARY"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      # Before the checkout, so that it is a real clone.
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+
+      - uses: actions/checkout@v7
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install the lint tools
+        run: ./scripts/install-dev-deps.sh lint
+
+      - name: Lint
+        run: make lint
+
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+
+      # All of the history: the version is derived from the last release tag.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install what building and testing need
+        run: ./scripts/install-dev-deps.sh build test
+
+      - name: Version
+        id: version
+        run: echo "version=$(./scripts/version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Unit tests
+        run: make test
+
+      - name: Build the package
+        run: make package
+
+      - name: Check the package with namcap
+        run: |
+          namcap dist/*.pkg.tar.zst | tee namcap.log
+          if grep -q ' E: ' namcap.log; then
+            echo "::error::namcap reports errors in the package"
+            exit 1
+          fi
+
+      # This job's container is thrown away afterwards, which is the only
+      # reason these may run here: they install the package and rewrite the
+      # login screen's configuration.
+      - name: Integration tests
+        env:
+          PLBS_ALLOW_SYSTEM_TESTS: "1"
+        run: make test-integration PACKAGE="$(ls dist/*.pkg.tar.zst)"
+
+      - name: Attach the package to this run
+        uses: actions/upload-artifact@v7
+        with:
+          name: plasma-login-blur-slider-${{ steps.version.outputs.version }}
+          path: |
+            dist/*.pkg.tar.zst
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: How to try this build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "### plasma-login-blur-slider $VERSION"
+            echo
+            echo "Built and tested. To try it, download the artifact"
+            echo "\`plasma-login-blur-slider-$VERSION\` from this run, unpack it and run:"
+            echo
+            echo '```'
+            echo "sudo pacman -U plasma-login-blur-slider-$VERSION-1-any.pkg.tar.zst"
+            echo '```'
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

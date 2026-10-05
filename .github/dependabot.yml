@@ -1,0 +1,26 @@
+# Keeps the workflow actions and the release tooling current. The "chore"
+# prefix means these updates never cause a release by themselves.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      release-tooling:
+        patterns: ["*"]
+    ignore:
+      # Version 10 needs a newer changelog writer than the notes generator
+      # bundled with semantic-release 25 has; the release notes fail to
+      # render with it. Lift this together with a semantic-release major.
+      - dependency-name: conventional-changelog-conventionalcommits
+        update-types: ["version-update:semver-major"]
