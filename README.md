@@ -293,4 +293,6 @@ made automatically from the commit messages.
 
 ## License
 
-GPL-3.0-or-later
+GPL-3.0-or-later; the text is in [LICENSE](LICENSE). The repository follows
+the [REUSE](https://reuse.software) specification: every file states its
+copyright and its licence.

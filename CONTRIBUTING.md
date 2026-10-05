@@ -15,7 +15,7 @@ Elsewhere you can still work on the tool and run its unit tests with
 ## Everyday commands
 
     make check        lint and unit tests; run this before committing
-    make lint         shellcheck, qmllint and actionlint
+    make lint         shellcheck, qmllint, actionlint and the REUSE check
     make test         unit tests
     make package      source tarball and Arch package, in dist/
     make dist         source tarball only
@@ -62,6 +62,37 @@ One trap: a line in the body that begins with "breaking change" is taken for
 a breaking change, whatever the case and even if it is the middle of a wrapped
 sentence. Break the line somewhere else.
 
+## Licensing
+
+The project is licensed under GPL-3.0-or-later and follows the
+[REUSE](https://reuse.software) specification, which means that every file
+says who holds its copyright and under which licence it is. `make lint-reuse`
+checks that with the `reuse` tool (`pacman -S reuse`, or `pipx install reuse`),
+and CI runs it as part of **Lint**.
+
+A new file needs one of two things:
+
+- If it can hold a comment, it starts with these two lines, in its own comment
+  syntax and after the shebang if there is one:
+
+      # SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+      # SPDX-License-Identifier: GPL-3.0-or-later
+
+  Copy them from a neighbouring file, or let the tool write them:
+
+      reuse annotate --copyright "plasma-login-blur-slider contributors" \
+          --license GPL-3.0-or-later path/to/file
+
+- If it cannot (JSON, a test fixture, a generated file), add its path to
+  `REUSE.toml`. Markdown files are covered there already.
+
+The licence text is in the repository twice: `LICENSE`, where people and
+GitHub look for it, and `LICENSES/GPL-3.0-or-later.txt`, where REUSE requires
+it. They are the same, unmodified text, and the lint fails if they ever differ.
+
+If you bring in code from elsewhere, keep its copyright and licence notices,
+and raise it in the pull request if its licence is not GPL-3.0-or-later.
+
 ## Pull requests
 
 1. Branch from `main`, commit, push, open a pull request. Give it a
@@ -70,7 +101,7 @@ sentence. Break the line somewhere else.
 2. CI runs three jobs, and all three have to pass:
    - **Commit messages**: every commit and the title; its summary also says
      what merging would release;
-   - **Lint**: shellcheck, qmllint, actionlint;
+   - **Lint**: shellcheck, qmllint, actionlint, and the REUSE check;
    - **Build and test**: unit tests, the package, and the integration tests
      with that package installed.
 3. The **Build and test** job attaches the built package to the run

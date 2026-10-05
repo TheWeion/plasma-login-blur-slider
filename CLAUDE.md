@@ -60,6 +60,7 @@ PKGBUILD, *.install, Makefile    packaging and build
 scripts/                         version.sh, dist.sh, lint-qml.sh, install-dev-deps.sh,
                                  release-preview.mjs
 package.json, .releaserc.json    release and commit-message tooling (no project code)
+LICENSE, LICENSES/, REUSE.toml   the licence text (twice) and who it covers
 tests/unit/                      bats tests of the tool, sandboxed
 tests/integration/               real login screen and lock screen, headless
 .github/workflows/               ci.yml (pull requests), release.yml (main)
@@ -69,7 +70,8 @@ tests/integration/               real login screen and lock screen, headless
 
 ```sh
 make check              # lint + unit tests; run before every commit
-make lint               # shellcheck, qmllint, actionlint (lint-sh / lint-qml / lint-workflows)
+make lint               # shellcheck, qmllint, actionlint, reuse
+                        # (lint-sh / lint-qml / lint-workflows / lint-reuse)
 make test               # unit tests (bats; uses fakeroot when not root)
 make package            # dist/: source tarball + Arch package (needs makepkg)
 make dist               # dist/: source tarball only
@@ -86,7 +88,7 @@ drives the real login screen and lock screen. It rewrites
 `make lint-qml` and the integration tests need an Arch system with Plasma
 installed. `make lint-sh` and `make test` run anywhere with shellcheck, bats
 and fakeroot (tests that need `kreadconfig6`/`kwriteconfig6` skip without
-them).
+them), and `make lint-reuse` anywhere with the `reuse` tool.
 
 ## Things that must stay true
 
@@ -161,6 +163,30 @@ them).
 - Work on a branch, open a pull request. CI builds and tests it and attaches
   the package. Merging to `main` runs the release workflow, which tags and
   publishes if the commits call for it. Nothing is committed back to `main`.
+
+## Licensing
+
+The project is GPL-3.0-or-later and follows the [REUSE](https://reuse.software)
+specification: every file states its copyright and its licence, and
+`make lint-reuse` fails if one does not.
+
+- A new file that can hold a comment starts with these two lines, in its own
+  comment syntax and after the shebang if it has one. Copy them from a
+  neighbouring file:
+
+  ```
+  # SPDX-FileCopyrightText: 2026 plasma-login-blur-slider contributors
+  # SPDX-License-Identifier: GPL-3.0-or-later
+  ```
+
+- A file that cannot hold one (JSON, test fixtures, generated files) is listed
+  in `REUSE.toml` instead. Markdown is covered there as well.
+- `LICENSE` and `LICENSES/GPL-3.0-or-later.txt` are the same text, the FSF's.
+  Never edit either; the lint compares them.
+- Do not change a copyright or licence line that is already there, and do not
+  give a file another licence. Code taken from somewhere else keeps its own
+  notices; if that brings in another licence, stop and say so in the pull
+  request rather than adding it.
 
 ## Style
 
