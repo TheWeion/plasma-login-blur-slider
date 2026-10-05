@@ -44,5 +44,7 @@ uninstall:
 	rm -f "$(DESTDIR)$(HOOKDIR)/$(NAME).hook" "$(DESTDIR)$(UNITDIR)/$(NAME).service"
 
 dist:
+	tmp=$$(mktemp -d) && \
 	tar --transform 's|^\.|$(NAME)-$(VERSION)|' --exclude='./*.tar.gz' --exclude='./*.pkg.tar.*' --exclude='./pkg' --exclude='./src' \
-	    --owner=0 --group=0 -czf $(NAME)-$(VERSION).tar.gz ./
+	    --owner=0 --group=0 -czf "$$tmp/$(NAME)-$(VERSION).tar.gz" ./ && \
+	mv "$$tmp/$(NAME)-$(VERSION).tar.gz" . && rmdir "$$tmp"
