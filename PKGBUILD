@@ -3,7 +3,7 @@
 pkgname=plasma-login-blur-slider
 pkgver=1.0.0
 pkgrel=1
-pkgdesc='Blur intensity slider for the Plasma Login Manager login screen (no patching or rebuilding)'
+pkgdesc='Blur intensity and style for the Plasma login screen and lock screen (no patching or rebuilding)'
 arch=(any)
 license=(GPL-3.0-or-later)
 depends=(kconfig

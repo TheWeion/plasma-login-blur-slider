@@ -1,6 +1,6 @@
 post_install() {
   plasma-login-blur-slider sync --quiet || true
-  echo '"Blur intensity" and "Blur style" are in System Settings > Login Screen > Configure Appearance.'
+  echo '"Blur intensity" and "Blur style" are in System Settings > Login Screen and > Screen Locking, under Configure Appearance.'
 }
 
 post_upgrade() {

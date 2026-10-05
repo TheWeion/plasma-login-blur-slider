@@ -1,21 +1,24 @@
 # plasma-login-blur-slider
 
 Adds a **Blur intensity** slider and a **Blur style** choice to *System
-Settings → Login Screen → Configure Appearance…*, so you can choose how
-Plasma Login Manager blurs the wallpaper behind the login prompt:
+Settings → Login Screen → Configure Appearance…* and to *System Settings →
+Screen Locking → Configure Appearance…*, so you can choose how Plasma blurs
+the wallpaper behind the login prompt and behind the unlock prompt:
 
-* **Standard** is the login screen's own blur, from 0 % (no blur) to 100 %
-  (the stock look).
+* **Standard** is the screen's own blur, from 0 % (no blur) to 100 % (the
+  stock look).
 * **Frosted glass** is a smooth Gaussian blur, the kind a desktop
   compositor's blur effect produces. It shows gradually more of the wallpaper
   as you lower the intensity and goes much further at the top of the scale.
 
-The blur is applied while the password prompt is showing and fades out when
-only the clock is left, as Plasma Login Manager designed it; the settings
-decide what it looks like.
+The login screen and the lock screen each have their own settings, next to
+their own wallpaper. On both, the blur is applied while the password prompt
+is showing and fades out when only the clock is left, as Plasma designed it;
+the settings decide what it looks like.
 
-Plasma Login Manager itself is not patched, replaced or rebuilt, and nothing
-is compiled, so the package keeps working across Plasma updates.
+Plasma Login Manager and the lock screen are not patched, replaced or
+rebuilt, and nothing is compiled, so the package keeps working across Plasma
+updates.
 
 If a third-party compositor effect such as Better Blur DX is blurring the
 whole login screen, the package also switches that off, for the login screen
@@ -58,9 +61,20 @@ The same from a terminal:
     sudo plasma-login-blur-slider style frosted
     plasma-login-blur-slider status           # what is installed, current settings
 
+The lock screen is set up the same way in *System Settings → Screen Locking →
+Configure Appearance…*, and shows the change the next time the screen is
+locked. Its settings belong to your user, so from a terminal they are changed
+without `sudo`, by adding `--lock`:
+
+    plasma-login-blur-slider get --lock
+    plasma-login-blur-slider set 35 --lock
+    plasma-login-blur-slider style frosted --lock
+
 Each time the login screen starts, its wallpaper process logs one line such
 as `plasma-login-blur-slider: login wallpaper blur set to 35% (frosted
-glass)`, which is a quick way to confirm the settings were picked up:
+glass)`, and so does the lock screen each time it comes up (`lock screen
+wallpaper blur set to …`). That is a quick way to confirm the settings were
+picked up:
 
     journalctl -b | grep plasma-login-blur-slider
 
@@ -152,10 +166,10 @@ switches the diagnostics off again.
 
 ## How it works
 
-The login screen draws its wallpaper with an ordinary Plasma wallpaper plugin
-(the same *Image*, *Plain Color*, … plugins the desktop uses), and the Login
-Screen settings page embeds that plugin's own settings page. Plugins are
-looked up in `/usr/local/share` before `/usr/share`.
+The login screen and the lock screen draw their wallpaper with an ordinary
+Plasma wallpaper plugin (the same *Image*, *Plain Color*, … plugins the
+desktop uses), and their settings pages embed that plugin's own settings
+page. Plugins are looked up in `/usr/local/share` before `/usr/share`.
 
 `plasma-login-blur-slider sync` puts a small *overlay* plugin with the same
 id into `/usr/local/share/plasma/wallpapers/<id>/`. The overlay contains no
@@ -163,12 +177,14 @@ copy of the stock plugin's code. Its `main.qml` and `config.qml` load the
 stock files and add three things:
 
 * the settings `LoginBlurIntensity` and `LoginBlurStyle`, saved by the Login
-  Screen settings exactly like the wallpaper's other settings (in
-  `/etc/plasmalogin.conf`);
-* the slider and the style choice, which are only created inside the Login
-  Screen settings;
-* a hook that scales the login screen's blur by the intensity. It only acts
-  inside Plasma Login Manager's wallpaper process.
+  Screen and Screen Locking settings exactly like the wallpaper's other
+  settings (in `/etc/plasmalogin.conf` for the login screen, in your
+  `~/.config/kscreenlockerrc` for the lock screen);
+* the slider and the style choice, which are only created inside those two
+  settings pages;
+* a hook that scales the screen's blur by the intensity. It only acts inside
+  Plasma Login Manager's wallpaper process and inside the lock screen. Both
+  build the same scene around the wallpaper.
 
 For frosted glass the hook also lays a Gaussian blur of the wallpaper over
 the login screen's own blur, inside the picture the login screen then applies
@@ -181,8 +197,8 @@ background where a wallpaper is transparent, so nothing sharp is left showing
 through (the standard blur, like the stock one, does leave the edges of
 transparent areas visible).
 
-The desktop and the lock screen find the same overlay plugins, but for them
-they behave exactly like the stock plugins.
+The desktop finds the same overlay plugins, but for it they behave exactly
+like the stock plugins.
 
 What the package creates outside its own files is in
 `/usr/local/share/plasma/wallpapers/`, one directory per wallpaper type, each
@@ -197,38 +213,44 @@ knows what to switch back on.
 
 ## Good to know
 
-* **Only the blur changes.** The login screen also adjusts the wallpaper's
-  colours a little so the text stays readable; that stays as it is, in both
-  styles and even at 0 %.
+* **Only the blur changes.** Both screens also adjust the wallpaper's colours
+  a little so the text stays readable; that stays as it is, in both styles
+  and even at 0 %.
 * **The blur follows the prompt.** With only the clock on screen the
   wallpaper is not blurred at any setting. The login screen usually starts
   with the prompt showing, for about ten seconds if nothing is touched, so it
   usually starts out blurred.
+* **Two screens, two sets of settings.** The login screen's are system-wide
+  and need the administrator password; the lock screen's are per user. One
+  does not follow the other: set both if you want them to match.
 * Both settings are stored with the settings of the chosen wallpaper type.
-  When you switch the type in the Login Screen settings, the slider and the
-  style keep what they were set to.
+  When you switch the type in the settings, the slider and the style keep
+  what they were set to.
 * Frosted glass measures in pixels, like the stock blur and like a
   compositor's, so the same setting looks stronger on a screen with fewer of
   them. On a scaled (HiDPI) screen these are the scaled pixels: the blur
   looks the same as on an unscaled screen of the same effective resolution.
 * The slider moves in steps of 5 %; `set` accepts any whole number from 0 to
   100.
-* Wallpaper types are overlaid only if Plasma Login Manager offers them and
-  they are installed system-wide: `org.kde.image`, `org.kde.color`,
+* Wallpaper types are overlaid if they are installed system-wide and are
+  one of those Plasma Login Manager offers, or Slideshow, which the lock
+  screen also offers: `org.kde.image`, `org.kde.slideshow`, `org.kde.color`,
   `org.kde.potd`, `org.kde.haenau`, `org.kde.hunyango`, `org.kde.tiled`,
-  `online.knowmad.shaderwallpaper`. To change the list, set `PLUGINS="…"` in
-  `/etc/plasma-login-blur-slider.conf` and run
+  `online.knowmad.shaderwallpaper`. The lock screen accepts any installed
+  wallpaper type; for one that is not in this list, add it to `PLUGINS="…"`
+  in `/etc/plasma-login-blur-slider.conf` (or set `PLUGINS=all`) and run
   `sudo plasma-login-blur-slider sync`.
 * `/usr/local/share` has to come before `/usr/share` in `XDG_DATA_DIRS`,
   which is the default. `plasma-login-blur-slider status` checks this for the
   session it is run in.
-* Switching the wallpaper type in the Login Screen settings logs a few
-  harmless warnings from Kirigami's FormLayout while the old rows are
-  removed.
-* The hook relies on how Plasma Login Manager builds its wallpaper scene, and
-  the slider on how its settings page is laid out. If a future release
+* Switching the wallpaper type in the settings logs a few harmless warnings
+  from Kirigami's FormLayout while the old rows are removed.
+* A look-and-feel theme that brings its own lock screen is only covered if
+  that lock screen blurs the wallpaper the way Plasma's does.
+* The hook relies on how the two screens build their wallpaper scene, and
+  the controls on how their settings pages are laid out. If a future release
   changes either, the affected part quietly does nothing and you are back to
-  stock behaviour; the login screen itself is not affected.
+  stock behaviour; the screens themselves are not affected.
 
 ## Tested with
 
